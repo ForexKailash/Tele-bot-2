@@ -159,12 +159,19 @@ class SignalGenerator:
         self.public_signals_today += 1
 
     def get_best_signal(self, signal_type="public"):
+        # Complete list of trading pairs (12 symbols)
         pairs = {
             "XAUUSD=X": "🟡 GOLD",
             "EURUSD=X": "💶 EUR/USD",
             "GBPUSD=X": "💷 GBP/USD",
+            "AUDUSD=X": "🇦🇺 AUD/USD",
+            "USDJPY=X": "💴 USD/JPY",
+            "USDCAD=X": "🇨🇦 USD/CAD",
+            "NZDUSD=X": "🇳🇿 NZD/USD",
             "BTC-USD": "₿ BITCOIN",
-            "NQ=F": "📊 NAS100"
+            "ETH-USD": "🔷 ETHEREUM",
+            "NQ=F": "📊 NAS100",
+            "CL=F": "🛢️ USOIL"
         }
         best = None
         best_conf = 0

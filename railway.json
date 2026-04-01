@@ -2,7 +2,9 @@
   "build": {
     "builder": "NIXPACKS"
   },
-  "scripts": {
-    "start": "python main.py"
+  "nixpacks": {
+    "plan": {
+      "python": "3.11"
+    }
   }
 }

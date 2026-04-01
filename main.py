@@ -9,30 +9,34 @@ import logging
 import random
 
 from signals import SignalGenerator
+from market_data import MarketData
 
-# === YOUR CONFIGURATION (already filled) ===
+# === YOUR CONFIGURATION (ALL FILLED) ===
 BOT_TOKEN = "8653450456:AAER9w6Gjj5IWkyCs1taa01N-DdMFZqxt3E"
 ADMIN_ID = 6253584826
 WEBSITE_URL = "https://forexkailash.netlify.app"
 UPI_ID = "kailashbhardwaj66-2@okicici"
 VIP_PRICE = "₹399/month"
 VIP_LINK = "https://t.me/+Snj0BVAwjDo3NTA1"
+FREE_CHANNEL_LINK = "https://t.me/tradewithkailashh"
 
-# Channel IDs – note the negative sign (Telegram requires negative for channels)
-PUBLIC_CHANNEL = -1003807818260    # Your public channel ID
-VIP_CHANNEL = -1003826269063       # Your VIP channel ID
+# Channel IDs (negative numbers as required by Telegram)
+PUBLIC_CHANNEL = -1003807818260    # public channel ID
+VIP_CHANNEL = -1003826269063       # VIP channel ID
 # =======================================
 
 # === INITIALISE ===
 bot = telebot.TeleBot(BOT_TOKEN)
 signal_gen = SignalGenerator()
+md = MarketData()
 
 # === DATA STORAGE ===
 user_data = {}
 free_signal_count = {}
 vip_users = {}
+active_trades = {}
 
-for fname, var in [('user_data.json', user_data), ('free_count.json', free_signal_count), ('vip_users.json', vip_users)]:
+for fname, var in [('user_data.json', user_data), ('free_count.json', free_signal_count), ('vip_users.json', vip_users), ('active_trades.json', active_trades)]:
     try:
         with open(fname, 'r') as f:
             var.update(json.load(f))
@@ -46,6 +50,8 @@ def save_data():
         json.dump(free_signal_count, f)
     with open('vip_users.json', 'w') as f:
         json.dump(vip_users, f)
+    with open('active_trades.json', 'w') as f:
+        json.dump(active_trades, f)
 
 # === KEYBOARDS ===
 def main_menu():
@@ -53,6 +59,7 @@ def main_menu():
     kb.add(
         InlineKeyboardButton("📊 Free Signal", callback_data="free_signal"),
         InlineKeyboardButton("👑 VIP Channel", callback_data="vip_channel"),
+        InlineKeyboardButton("📢 Free Channel", callback_data="free_channel"),
         InlineKeyboardButton("📈 Live Rates", callback_data="live_rates"),
         InlineKeyboardButton("🎓 Courses", callback_data="courses"),
         InlineKeyboardButton("🌐 Website", callback_data="website"),
@@ -118,6 +125,14 @@ India's Most Trusted Forex Signals Provider | 5000+ Happy Traders
 *Choose an option:* 👇
 """
     bot.send_message(message.chat.id, text, parse_mode='Markdown', reply_markup=main_menu())
+
+@bot.callback_query_handler(func=lambda call: call.data == "free_channel")
+def free_channel_cb(call):
+    txt = f"📢 *Join our Free Channel for regular signals!*\n\n🔗 {FREE_CHANNEL_LINK}"
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton("🔗 Join Free Channel", url=FREE_CHANNEL_LINK), InlineKeyboardButton("🔙 Back", callback_data="back_menu"))
+    bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=kb)
+    bot.answer_callback_query(call.id)
 
 @bot.callback_query_handler(func=lambda call: call.data == "free_signal")
 def free_signal_cb(call):
@@ -243,7 +258,19 @@ def verify_cb(call):
 def live_rates_cb(call):
     from market_data import MarketData
     md = MarketData()
-    pairs = {"XAUUSD=X":"🟡 Gold","EURUSD=X":"💶 EUR/USD","GBPUSD=X":"💷 GBP/USD","BTC-USD":"₿ Bitcoin","NQ=F":"📊 NAS100"}
+    pairs = {
+        "XAUUSD=X": "🟡 Gold",
+        "EURUSD=X": "💶 EUR/USD",
+        "GBPUSD=X": "💷 GBP/USD",
+        "AUDUSD=X": "🇦🇺 AUD/USD",
+        "USDJPY=X": "💴 USD/JPY",
+        "USDCAD=X": "🇨🇦 USD/CAD",
+        "NZDUSD=X": "🇳🇿 NZD/USD",
+        "BTC-USD": "₿ Bitcoin",
+        "ETH-USD": "🔷 Ethereum",
+        "NQ=F": "📊 NAS100",
+        "CL=F": "🛢️ USOIL"
+    }
     txt = "📈 *Live Market Rates*\n\n"
     for sym, name in pairs.items():
         p = md.get_live_price(sym)
@@ -286,163 +313,181 @@ def back_cb(call):
     bot.edit_message_text("🏠 *Main Menu*", call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=main_menu())
     bot.answer_callback_query(call.id)
 
-# === AUTO SIGNAL LOOP ===
-def auto_signal_loop():
-    last_vip_hour = -1
-    last_public_hour = -1
-    last_promo_hour = -1
+# === REAL-TIME MONITORING LOOP ===
+def monitor_trades():
+    """Continuously check active trades for TP/SL and send updates"""
     while True:
-        now = datetime.now()
-        hour = now.hour
-        # VIP signals (max 30/day, roughly hourly)
-        if signal_gen.can_send_vip_signal() and hour != last_vip_hour:
-            sig = signal_gen.get_best_signal(signal_type="vip")
-            if sig:
-                msg = signal_gen.format_vip_signal(sig)
-                if VIP_CHANNEL:
-                    try:
-                        bot.send_message(VIP_CHANNEL, msg, parse_mode='Markdown')
-                        signal_gen.increment_vip_count()
-                        last_vip_hour = hour
-                        logging.info(f"VIP signal sent ({signal_gen.vip_signals_today}/30)")
-                    except Exception as e:
-                        logging.error(f"VIP send error: {e}")
-        # Public signals (max 10/day, every 2-3 hours)
-        if signal_gen.can_send_public_signal() and hour % 2 == 0 and hour != last_public_hour:
-            sig = signal_gen.get_best_signal(signal_type="public")
-            if sig:
-                msg = signal_gen.format_public_signal(sig)
-                if PUBLIC_CHANNEL:
-                    try:
-                        bot.send_message(PUBLIC_CHANNEL, msg, parse_mode='Markdown')
-                        signal_gen.increment_public_count()
-                        last_public_hour = hour
-                        logging.info(f"Public signal sent ({signal_gen.public_signals_today}/10)")
-                    except Exception as e:
-                        logging.error(f"Public send error: {e}")
-        # Promotion in public channel every 4 hours (improved version)
-        if hour % 4 == 0 and hour != last_promo_hour and PUBLIC_CHANNEL:
-            promo = f"""
-🔥 *EXCLUSIVE VIP ACCESS – LIMITED SEATS* 🔥
-
-✨ *Upgrade to VIP & Get:*
-• 25-30 Premium Signals/Day (vs 8-10 free)
-• ⏰ Early Entry – 5-10 min before public
-• 📊 Live Market Analysis & News
-• 💬 1-on-1 VIP Support
-• 🎯 89% Proven Win Rate
-
-💰 *Only {VIP_PRICE}*  
-🎓 *VIP + Course Bundle:* ₹9999 (Save ₹2999)
-
-💳 *Pay:* `{UPI_ID}`  
-📱 *Join:* @ForexKailash after payment
-
-⏳ *Limited spots available – don't miss out!*
-"""
-            try:
-                bot.send_message(PUBLIC_CHANNEL, promo, parse_mode='Markdown')
-                last_promo_hour = hour
-                logging.info("Promotion sent")
-            except Exception as e:
-                logging.error(f"Promotion send error: {e}")
-        time.sleep(3600)  # check every hour
-
-threading.Thread(target=auto_signal_loop, daemon=True).start()
-
-# === ADMIN COMMANDS ===
-@bot.message_handler(commands=['addvip'])
-def add_vip(message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    try:
-        uid = message.text.split()[1]
-        vip_users[uid] = {"activated": datetime.now().isoformat()}
-        save_data()
-        bot.reply_to(message, f"✅ VIP added for {uid}")
         try:
-            bot.send_message(int(uid), f"🎉 VIP access activated! Join: {VIP_LINK}", parse_mode='Markdown')
-        except:
-            pass
-    except:
-        bot.reply_to(message, "Usage: /addvip [user_id]")
+            for trade_id, trade in list(active_trades.items()):
+                symbol = trade['symbol']
+                current_price = md.get_live_price(symbol)
+                if current_price is None:
+                    continue
 
-@bot.message_handler(commands=['resetfree'])
-def reset_free(message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    try:
-        uid = message.text.split()[1]
-        free_signal_count[uid] = 0
-        save_data()
-        bot.reply_to(message, f"✅ Free count reset for {uid}")
-    except:
-        bot.reply_to(message, "Usage: /resetfree [user_id]")
+                # Check SL hit
+                if (trade['action'] == "BUY ✅" and current_price <= trade['sl']) or \
+                   (trade['action'] == "SELL 🔻" and current_price >= trade['sl']):
+                    if trade['channel_type'] == 'public':
+                        try:
+                            bot.delete_message(PUBLIC_CHANNEL, trade['message_id'])
+                        except:
+                            pass
+                    del active_trades[trade_id]
+                    save_data()
+                    continue
 
-@bot.message_handler(commands=['broadcast'])
-def broadcast(message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    msg = message.text.replace('/broadcast', '').strip()
-    if not msg:
-        bot.reply_to(message, "Usage: /broadcast [message]")
-        return
-    cnt = 0
-    for uid in user_data:
-        try:
-            bot.send_message(int(uid), f"📢 *Announcement*\n\n{msg}", parse_mode='Markdown')
-            cnt += 1
-        except:
-            pass
-    bot.reply_to(message, f"✅ Sent to {cnt} users")
+                # Check TP1 hit
+                if not trade.get('tp1_hit', False):
+                    if (trade['action'] == "BUY ✅" and current_price >= trade['tp1']) or \
+                       (trade['action'] == "SELL 🔻" and current_price <= trade['tp1']):
+                        trade['tp1_hit'] = True
+                        if trade['channel_type'] == 'vip':
+                            msg = f"""
+🎯 *TP1 HIT!* 🎯
 
-@bot.message_handler(commands=['stats'])
-def stats(message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    txt = f"""
-📊 *Bot Stats*
+✅ *{trade['pair']}*  
+💰 Profit: +{trade['profit_pct']:.1f}%
 
-👥 Users: {len(user_data)}
-👑 VIP: {len(vip_users)}
-📊 Active: {len(user_data)}
+━━━━━━━━━━━━━━━━━━━━━━
+🎓 *Ready to master trading?*  
+Enroll in our courses and get even better results!
 
-📈 Today's signals:
-👑 VIP: {signal_gen.vip_signals_today}/30
-📊 Public: {signal_gen.public_signals_today}/10
+📚 *Forex Mastery* - ₹2999  
+💰 *Smart Money* - ₹3999  
+🎯 *Price Action* - ₹3499  
+✨ *Bundle (VIP+All Courses)* - ₹9999
 
-💰 VIP Price: {VIP_PRICE}
+💳 UPI: kailashbhardwaj66-2@okicici  
+👉 Contact @ForexKailash to join
+
+🚀 *Don't miss the next TP2!*
 """
-    bot.reply_to(message, txt, parse_mode='Markdown')
+                            try:
+                                bot.send_message(VIP_CHANNEL, msg, parse_mode='Markdown')
+                            except:
+                                pass
+                        save_data()
 
-@bot.message_handler(commands=['forcesignal'])
-def force_signal(message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    bot.reply_to(message, "🔍 Generating...")
-    vip_sig = signal_gen.get_best_signal("vip")
-    pub_sig = signal_gen.get_best_signal("public")
-    if vip_sig and VIP_CHANNEL:
-        bot.send_message(VIP_CHANNEL, signal_gen.format_vip_signal(vip_sig), parse_mode='Markdown')
-        signal_gen.increment_vip_count()
-    if pub_sig and PUBLIC_CHANNEL:
-        bot.send_message(PUBLIC_CHANNEL, signal_gen.format_public_signal(pub_sig), parse_mode='Markdown')
-        signal_gen.increment_public_count()
-    bot.reply_to(message, f"✅ VIP: {signal_gen.vip_signals_today}/30, Public: {signal_gen.public_signals_today}/10")
+                # Check TP2 hit
+                if not trade.get('tp2_hit', False):
+                    if (trade['action'] == "BUY ✅" and current_price >= trade['tp2']) or \
+                       (trade['action'] == "SELL 🔻" and current_price <= trade['tp2']):
+                        trade['tp2_hit'] = True
+                        if trade['channel_type'] == 'vip':
+                            msg = f"""
+🏆 *TP2 HIT!* 🏆
 
-# === START ===
-if __name__ == "__main__":
-    print("="*70)
-    print("🤖 KAILASH FOREX SIGNAL BOT – PROFESSIONAL EDITION")
-    print("="*70)
-    print("✅ VIP: 25-30 signals/day + course promos")
-    print("✅ Public: 8-10 signals/day + VIP promos")
-    print("✅ Live data + RSI/MACD/MA analysis")
-    print("✅ Auto signals every hour")
-    print("✅ FOMO messages & confidence scores")
-    print("✅ Course selling system")
-    print("✅ Admin commands ready")
-    print(f"✅ Public Channel ID: {PUBLIC_CHANNEL}")
-    print(f"✅ VIP Channel ID: {VIP_CHANNEL}")
-    print("="*70)
-    bot.infinity_polling()
+✅ *{trade['pair']}*  
+💰 Profit: +{trade['profit_pct']*2:.1f}%
+
+🎉 Congratulations! You've captured full profit.
+
+━━━━━━━━━━━━━━━━━━━━━━
+Want more winning trades?  
+Join our VIP channel for 25-30 signals/day!
+
+👉 @ForexKailash
+"""
+                            try:
+                                bot.send_message(VIP_CHANNEL, msg, parse_mode='Markdown')
+                            except:
+                                pass
+                        del active_trades[trade_id]
+                        save_data()
+                        continue
+
+                # SL warning for VIP
+                if trade['channel_type'] == 'vip':
+                    if trade['action'] == "BUY ✅":
+                        dist_pct = (trade['sl'] - current_price) / trade['sl'] * 100
+                        if dist_pct < 0.5 and not trade.get('sl_warning_sent', False):
+                            trade['sl_warning_sent'] = True
+                            msg = f"""
+⚠️ *SL WARNING* ⚠️
+
+Pair: {trade['pair']}
+Price is approaching Stop Loss ({trade['sl']}).
+
+Consider managing your risk. If you haven't already, you may want to close partial position.
+
+🔒 *VIP members get early exit alerts!*
+"""
+                            try:
+                                bot.send_message(VIP_CHANNEL, msg, parse_mode='Markdown')
+                            except:
+                                pass
+                            save_data()
+            time.sleep(5)
+        except Exception as e:
+            logging.error(f"Monitor error: {e}")
+            time.sleep(5)
+
+# === REAL-TIME SIGNAL LOOP ===
+def real_time_signal_loop():
+    """Check for new signals every 5 seconds and send immediately"""
+    last_vip_signal_time = 0
+    last_public_signal_time = 0
+    while True:
+        try:
+            now = datetime.now()
+            # VIP signals
+            if signal_gen.can_send_vip_signal():
+                sig = signal_gen.get_best_signal(signal_type="vip")
+                if sig:
+                    if last_vip_signal_time and (now - last_vip_signal_time).seconds < 60:
+                        pass
+                    else:
+                        msg = signal_gen.format_vip_signal(sig)
+                        if VIP_CHANNEL:
+                            try:
+                                sent = bot.send_message(VIP_CHANNEL, msg, parse_mode='Markdown')
+                                import hashlib
+                                trade_id = hashlib.md5(f"{sig['pair']}_{sig['entry']}_{now}".encode()).hexdigest()
+                                active_trades[trade_id] = {
+                                    'symbol': sig['symbol'],
+                                    'pair': sig['pair'],
+                                    'action': sig['action'],
+                                    'entry': sig['entry'],
+                                    'tp1': sig['tp1'],
+                                    'tp2': sig['tp2'],
+                                    'sl': sig['sl'],
+                                    'profit_pct': sig['profit_pct'],
+                                    'message_id': sent.message_id,
+                                    'channel_type': 'vip',
+                                    'tp1_hit': False,
+                                    'tp2_hit': False,
+                                    'sl_warning_sent': False,
+                                    'time': now.isoformat()
+                                }
+                                signal_gen.increment_vip_count()
+                                save_data()
+                                last_vip_signal_time = now
+                                logging.info(f"VIP signal sent ({signal_gen.vip_signals_today}/30)")
+                            except Exception as e:
+                                logging.error(f"VIP send error: {e}")
+
+            # Public signals
+            if signal_gen.can_send_public_signal():
+                sig = signal_gen.get_best_signal(signal_type="public")
+                if sig:
+                    if last_public_signal_time and (now - last_public_signal_time).seconds < 120:
+                        pass
+                    else:
+                        msg = signal_gen.format_public_signal(sig)
+                        if PUBLIC_CHANNEL:
+                            try:
+                                sent = bot.send_message(PUBLIC_CHANNEL, msg, parse_mode='Markdown')
+                                import hashlib
+                                trade_id = hashlib.md5(f"{sig['pair']}_{sig['entry']}_{now}".encode()).hexdigest()
+                                active_trades[trade_id] = {
+                                    'symbol': sig['symbol'],
+                                    'pair': sig['pair'],
+                                    'action': sig['action'],
+                                    'entry': sig['entry'],
+                                    'tp1': sig['tp1'],
+                                    'tp2': sig['tp2'],
+                                    'sl': sig['sl'],
+                                    'profit_pct': sig['profit_pct'],
+                                    'message_id': sent.message_id,
+                                    'channel_type': 'public',
+                       

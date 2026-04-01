@@ -6,128 +6,101 @@ import threading
 import time
 import json
 import logging
+import random
 
-# Import modules
 from signals import SignalGenerator
 
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Bot token
+# === YOUR CONFIGURATION (already filled) ===
 BOT_TOKEN = "8653450456:AAER9w6Gjj5IWkyCs1taa01N-DdMFZqxt3E"
 ADMIN_ID = 6253584826
-
-# Website details
 WEBSITE_URL = "https://forexkailash.netlify.app"
 UPI_ID = "kailashbhardwaj66-2@okicici"
 VIP_PRICE = "₹399/month"
 VIP_LINK = "https://t.me/+Snj0BVAwjDo3NTA1"
 
-# =====================================================
-# 🔴 IMPORTANT: YAHAN APNE CHANNEL IDs DALEN 🔴
-# =====================================================
-# Channel ID kaise nikale:
-# 1. Channel mein bot ko admin banao
-# 2. @userinfobot se channel se koi message forward karo
-# 3. Negative number mil jayega (jaise -1001234567890)
-# =====================================================
+# Channel IDs – note the negative sign (Telegram requires negative for channels)
+PUBLIC_CHANNEL = -1003807818260    # Your public channel ID
+VIP_CHANNEL = -1003826269063       # Your VIP channel ID
+# =======================================
 
-# Public channel ID (jahan free signals jayenge)
-PUBLIC_CHANNEL = -1003807818260  # <- APNA PUBLIC CHANNEL ID DALO
-
-# VIP channel ID (jahan premium signals jayenge)  
-VIP_CHANNEL = -1003826269063     # <- APNA VIP CHANNEL ID DALO
-
-# =====================================================
-# Agar channel ID nahi hai to None rakh do:
-# PUBLIC_CHANNEL = None
-# VIP_CHANNEL = None
-# =====================================================
-
-# Initialize bot and signal generator
+# === INITIALISE ===
 bot = telebot.TeleBot(BOT_TOKEN)
 signal_gen = SignalGenerator()
 
-# User data
+# === DATA STORAGE ===
 user_data = {}
 free_signal_count = {}
-active_trades = {}
+vip_users = {}
 
-# Load data
-try:
-    with open('user_data.json', 'r') as f:
-        user_data = json.load(f)
-except:
-    pass
+for fname, var in [('user_data.json', user_data), ('free_count.json', free_signal_count), ('vip_users.json', vip_users)]:
+    try:
+        with open(fname, 'r') as f:
+            var.update(json.load(f))
+    except:
+        pass
 
-try:
-    with open('free_count.json', 'r') as f:
-        free_signal_count = json.load(f)
-except:
-    pass
-
-# Save functions
-def save_user_data():
+def save_data():
     with open('user_data.json', 'w') as f:
         json.dump(user_data, f)
-
-def save_free_count():
     with open('free_count.json', 'w') as f:
         json.dump(free_signal_count, f)
+    with open('vip_users.json', 'w') as f:
+        json.dump(vip_users, f)
 
-# --------------------- BUTTONS ---------------------
-
+# === KEYBOARDS ===
 def main_menu():
-    keyboard = InlineKeyboardMarkup(row_width=2)
-    buttons = [
+    kb = InlineKeyboardMarkup(row_width=2)
+    kb.add(
         InlineKeyboardButton("📊 Free Signal", callback_data="free_signal"),
         InlineKeyboardButton("👑 VIP Channel", callback_data="vip_channel"),
         InlineKeyboardButton("📈 Live Rates", callback_data="live_rates"),
+        InlineKeyboardButton("🎓 Courses", callback_data="courses"),
         InlineKeyboardButton("🌐 Website", callback_data="website"),
         InlineKeyboardButton("📞 Support", callback_data="support")
-    ]
-    keyboard.add(*buttons)
-    return keyboard
+    )
+    return kb
 
 def vip_menu():
-    keyboard = InlineKeyboardMarkup(row_width=1)
-    buttons = [
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(
         InlineKeyboardButton("👑 Join VIP", url=VIP_LINK),
         InlineKeyboardButton("💳 Payment Info", callback_data="payment_info"),
+        InlineKeyboardButton("🎓 Courses", callback_data="courses"),
         InlineKeyboardButton("🔙 Back", callback_data="back_menu")
-    ]
-    keyboard.add(*buttons)
-    return keyboard
+    )
+    return kb
+
+def courses_menu():
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(
+        InlineKeyboardButton("📚 Forex Mastery", callback_data="course_forex"),
+        InlineKeyboardButton("💰 Smart Money", callback_data="course_smc"),
+        InlineKeyboardButton("🎯 Price Action", callback_data="course_pa"),
+        InlineKeyboardButton("✨ VIP + Bundle", callback_data="course_bundle"),
+        InlineKeyboardButton("🔙 Back", callback_data="back_menu")
+    )
+    return kb
 
 def payment_menu():
-    keyboard = InlineKeyboardMarkup(row_width=1)
-    buttons = [
+    kb = InlineKeyboardMarkup(row_width=1)
+    kb.add(
         InlineKeyboardButton("✅ Verify Payment", callback_data="verify_payment"),
         InlineKeyboardButton("🔙 Back", callback_data="vip_channel")
-    ]
-    keyboard.add(*buttons)
-    return keyboard
+    )
+    return kb
 
-# --------------------- START ---------------------
-
+# === HANDLERS ===
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    user_id = str(message.from_user.id)
-    
-    if user_id not in user_data:
-        user_data[user_id] = {
-            "name": message.from_user.first_name,
-            "username": message.from_user.username,
-            "joined": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        }
-        save_user_data()
-    
-    if user_id not in free_signal_count:
-        free_signal_count[user_id] = 0
-        save_free_count()
-    
-    welcome_text = f"""
+    uid = str(message.from_user.id)
+    if uid not in user_data:
+        user_data[uid] = {"name": message.from_user.first_name, "username": message.from_user.username, "joined": datetime.now().isoformat()}
+        save_data()
+    if uid not in free_signal_count:
+        free_signal_count[uid] = 0
+        save_data()
+
+    text = f"""
 🌟 *Welcome {message.from_user.first_name}!* 🌟
 
 *📈 Forex Trading With Kailash*
@@ -137,164 +110,341 @@ India's Most Trusted Forex Signals Provider | 5000+ Happy Traders
 🎯 Win Rate: 89%
 👥 Active Traders: 5000+
 ⏰ Support: 24/7
-💎 VIP Signals: 25-30/day
+
+*Channel Signals:*
+👑 VIP: 25-30 Premium Signals/Day
+📊 Public: 8-10 Free Signals/Day
 
 *Choose an option:* 👇
 """
-    bot.send_message(message.chat.id, welcome_text, parse_mode='Markdown', reply_markup=main_menu())
-
-# --------------------- FREE SIGNAL (LIVE DATA) ---------------------
+    bot.send_message(message.chat.id, text, parse_mode='Markdown', reply_markup=main_menu())
 
 @bot.callback_query_handler(func=lambda call: call.data == "free_signal")
-def free_signal_handler(call):
-    user_id = str(call.from_user.id)
-    
-    # Check free limit
-    if free_signal_count.get(user_id, 0) >= 3:
-        limit_text = """
-⚠️ *Free Signal Limit Reached* ⚠️
+def free_signal_cb(call):
+    uid = str(call.from_user.id)
+    if free_signal_count.get(uid, 0) >= 3:
+        txt = "⚠️ *Free Signal Limit Reached*\n\nJoin VIP for unlimited signals!\n💰 ₹399/month"
+        kb = InlineKeyboardMarkup()
+        kb.add(InlineKeyboardButton("👑 Join VIP", url=VIP_LINK), InlineKeyboardButton("🔙 Back", callback_data="back_menu"))
+        bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=kb)
+        return
 
-You have received 3 free signals today.
+    bot.edit_message_text("🔍 *Analyzing live market data...*", call.message.chat.id, call.message.message_id, parse_mode='Markdown')
+    sig = signal_gen.get_best_signal(signal_type="public")
+    if not sig:
+        txt = "❌ No signal available right now. Try again later."
+        kb = InlineKeyboardMarkup()
+        kb.add(InlineKeyboardButton("🔄 Try Again", callback_data="free_signal"), InlineKeyboardButton("🔙 Back", callback_data="back_menu"))
+        bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=kb)
+        return
 
-🌟 *Join VIP for Unlimited Signals!* 🌟
+    msg = signal_gen.format_public_signal(sig)
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton("🔄 New Signal", callback_data="free_signal"), InlineKeyboardButton("👑 Get VIP", callback_data="vip_channel"), InlineKeyboardButton("🔙 Back", callback_data="back_menu"))
+    bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=kb)
 
-*VIP Benefits:*
-• 25-30 Premium Signals Daily
-• Early Entry (Before Public)
+    free_signal_count[uid] = free_signal_count.get(uid, 0) + 1
+    save_data()
+    bot.answer_callback_query(call.id, f"Signal {free_signal_count[uid]}/3 used")
+
+@bot.callback_query_handler(func=lambda call: call.data == "vip_channel")
+def vip_cb(call):
+    txt = f"""
+👑 *VIP CHANNEL* 👑
+
+• 25-30 Premium Signals/Day
+• Early Entry (5-10 min before public)
+• Live Market Analysis
+• 1-on-1 Support
+• 89% Win Rate
+
+💰 *Price:* {VIP_PRICE}
+🎓 *Bundle:* ₹9999 (VIP + All Courses)
+
+👇 Join now
+"""
+    bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=vip_menu())
+    bot.answer_callback_query(call.id)
+
+@bot.callback_query_handler(func=lambda call: call.data == "courses")
+def courses_cb(call):
+    txt = """
+🎓 *KAILASH TRADING COURSES* 🎓
+
+📚 *Forex Mastery* - ₹2999
+💰 *Smart Money Concepts* - ₹3999
+🎯 *Price Action Pro* - ₹3499
+✨ *VIP + ALL COURSES BUNDLE* - ₹9999
+
+💳 UPI: kailashbhardwaj66-2@okicici
+"""
+    bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=courses_menu())
+    bot.answer_callback_query(call.id)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("course_"))
+def course_detail(call):
+    courses = {
+        "course_forex": {"name": "Forex Mastery", "price": "₹2999", "desc": "Complete forex foundation, technical analysis, risk management, 10+ hours."},
+        "course_smc": {"name": "Smart Money Concepts", "price": "₹3999", "desc": "Institutional trading, order blocks, liquidity, advanced strategies."},
+        "course_pa": {"name": "Price Action Pro", "price": "₹3499", "desc": "Candlestick patterns, supply/demand, entry/exit mastery."},
+        "course_bundle": {"name": "VIP + All Courses Bundle", "price": "₹9999", "desc": "Lifetime VIP signals + all 3 courses + personal mentorship."}
+    }
+    c = courses.get(call.data)
+    if c:
+        txt = f"""
+🎓 *{c['name']}* 🎓
+
+💰 *Price:* {c['price']}
+
+📘 *Details:* {c['desc']}
+
+*How to Enroll:*
+1️⃣ Pay to: `kailashbhardwaj66-2@okicici`
+2️⃣ Send screenshot to @ForexKailash
+3️⃣ Get instant access
+"""
+        kb = InlineKeyboardMarkup()
+        kb.add(InlineKeyboardButton("💳 Pay Now", callback_data="payment_info"), InlineKeyboardButton("🔙 Back", callback_data="courses"))
+        bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=kb)
+    bot.answer_callback_query(call.id)
+
+@bot.callback_query_handler(func=lambda call: call.data == "payment_info")
+def payment_info_cb(call):
+    txt = f"""
+💳 *Payment Details*
+
+*VIP Plan:* {VIP_PRICE}
+*Courses:* ₹2999–₹3999
+*Bundle:* ₹9999
+
+*UPI:* `{UPI_ID}`
+
+*Steps:*
+1️⃣ Pay to UPI
+2️⃣ Take screenshot
+3️⃣ Click "Verify Payment"
+4️⃣ Send screenshot to @ForexKailash
+
+⏰ Verification: 2‑4 hours
+"""
+    bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=payment_menu())
+    bot.answer_callback_query(call.id)
+
+@bot.callback_query_handler(func=lambda call: call.data == "verify_payment")
+def verify_cb(call):
+    txt = "✅ Send screenshot to @ForexKailash with your username and plan."
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton("📱 Send", url="https://t.me/ForexKailash"), InlineKeyboardButton("🔙 Back", callback_data="vip_channel"))
+    bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, reply_markup=kb)
+    bot.send_message(ADMIN_ID, f"🔔 Payment request from {call.from_user.first_name} (ID: {call.from_user.id})")
+    bot.answer_callback_query(call.id)
+
+@bot.callback_query_handler(func=lambda call: call.data == "live_rates")
+def live_rates_cb(call):
+    from market_data import MarketData
+    md = MarketData()
+    pairs = {"XAUUSD=X":"🟡 Gold","EURUSD=X":"💶 EUR/USD","GBPUSD=X":"💷 GBP/USD","BTC-USD":"₿ Bitcoin","NQ=F":"📊 NAS100"}
+    txt = "📈 *Live Market Rates*\n\n"
+    for sym, name in pairs.items():
+        p = md.get_live_price(sym)
+        txt += f"{name}: ${p:.2f}\n" if p else f"{name}: 🔴 Offline\n"
+    txt += f"\n⏰ Updated: {datetime.now().strftime('%H:%M:%S')} IST"
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton("🔄 Refresh", callback_data="live_rates"), InlineKeyboardButton("🔙 Back", callback_data="back_menu"))
+    bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=kb)
+    bot.answer_callback_query(call.id)
+
+@bot.callback_query_handler(func=lambda call: call.data == "website")
+def website_cb(call):
+    txt = "🌐 *Official Website*\n\nhttps://forexkailash.netlify.app"
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton("🌐 Visit", url=WEBSITE_URL), InlineKeyboardButton("🔙 Back", callback_data="back_menu"))
+    bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=kb)
+    bot.answer_callback_query(call.id)
+
+@bot.callback_query_handler(func=lambda call: call.data == "support")
+def support_cb(call):
+    txt = """
+📞 *Support*
+
+👤 Admin: @ForexKailash
+⏰ Hours: 9 AM – 9 PM IST
+
+*FAQ:*
+- VIP: ₹399/month → Pay → Verify → Get Access
+- Courses: Pay → Verify → Receive materials
+
+We're here to help! 🤝
+"""
+    kb = InlineKeyboardMarkup()
+    kb.add(InlineKeyboardButton("📱 Contact", url="https://t.me/ForexKailash"), InlineKeyboardButton("🔙 Back", callback_data="back_menu"))
+    bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=kb)
+    bot.answer_callback_query(call.id)
+
+@bot.callback_query_handler(func=lambda call: call.data == "back_menu")
+def back_cb(call):
+    bot.edit_message_text("🏠 *Main Menu*", call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=main_menu())
+    bot.answer_callback_query(call.id)
+
+# === AUTO SIGNAL LOOP ===
+def auto_signal_loop():
+    last_vip_hour = -1
+    last_public_hour = -1
+    last_promo_hour = -1
+    while True:
+        now = datetime.now()
+        hour = now.hour
+        # VIP signals (max 30/day, roughly hourly)
+        if signal_gen.can_send_vip_signal() and hour != last_vip_hour:
+            sig = signal_gen.get_best_signal(signal_type="vip")
+            if sig:
+                msg = signal_gen.format_vip_signal(sig)
+                if VIP_CHANNEL:
+                    try:
+                        bot.send_message(VIP_CHANNEL, msg, parse_mode='Markdown')
+                        signal_gen.increment_vip_count()
+                        last_vip_hour = hour
+                        logging.info(f"VIP signal sent ({signal_gen.vip_signals_today}/30)")
+                    except Exception as e:
+                        logging.error(f"VIP send error: {e}")
+        # Public signals (max 10/day, every 2-3 hours)
+        if signal_gen.can_send_public_signal() and hour % 2 == 0 and hour != last_public_hour:
+            sig = signal_gen.get_best_signal(signal_type="public")
+            if sig:
+                msg = signal_gen.format_public_signal(sig)
+                if PUBLIC_CHANNEL:
+                    try:
+                        bot.send_message(PUBLIC_CHANNEL, msg, parse_mode='Markdown')
+                        signal_gen.increment_public_count()
+                        last_public_hour = hour
+                        logging.info(f"Public signal sent ({signal_gen.public_signals_today}/10)")
+                    except Exception as e:
+                        logging.error(f"Public send error: {e}")
+        # Promotion in public channel every 4 hours
+        if hour % 4 == 0 and hour != last_promo_hour and PUBLIC_CHANNEL:
+            promo = """
+━━━━━━━━━━━━━━━━━━━━━━
+🌟 *VIP CHANNEL PROMOTION* 🌟
+
+🚀 Upgrade to VIP Today!
+
+✨ *VIP Benefits:*
+• 25-30 Premium Signals/Day
+• Early Entry (5-10 min before public)
 • Live Market Analysis
 • 1-on-1 VIP Support
 • 89% Win Rate
 
-💰 *Price:* ₹399/month
+💰 Only ₹399/month
+🎓 VIP + Course Bundle: ₹9999
+
+💳 UPI: kailashbhardwaj66-2@okicici
+👉 Join: @ForexKailash
+━━━━━━━━━━━━━━━━━━━━━━
 """
-        keyboard = InlineKeyboardMarkup()
-        keyboard.add(InlineKeyboardButton("👑 Join VIP", url=VIP_LINK))
-        keyboard.add(InlineKeyboardButton("💳 Payment Info", callback_data="payment_info"))
-        keyboard.add(InlineKeyboardButton("🔙 Back", callback_data="back_menu"))
-        
-        bot.edit_message_text(limit_text, call.message.chat.id, call.message.message_id, 
-                             parse_mode='Markdown', reply_markup=keyboard)
-        bot.answer_callback_query(call.id, "Daily limit reached! Join VIP for more")
+            try:
+                bot.send_message(PUBLIC_CHANNEL, promo, parse_mode='Markdown')
+                last_promo_hour = hour
+                logging.info("Promotion sent")
+            except:
+                pass
+        time.sleep(3600)  # check every hour
+
+threading.Thread(target=auto_signal_loop, daemon=True).start()
+
+# === ADMIN COMMANDS ===
+@bot.message_handler(commands=['addvip'])
+def add_vip(message):
+    if message.from_user.id != ADMIN_ID:
         return
-    
-    # Show loading
-    bot.edit_message_text("🔍 *Analyzing live market data...*\n\nFetching real-time prices and generating signal...", 
-                         call.message.chat.id, call.message.message_id, parse_mode='Markdown')
-    
-    # Get best signal from live data
-    signal = signal_gen.get_best_signal()
-    
-    if not signal:
-        error_text = """
-❌ *No Signal Available Right Now* ❌
-
-Market conditions are not ideal for a trade.
-
-📊 *Why?*
-• Waiting for clear confirmation
-• Indicators not aligned
-• Low volatility period
-
-⏰ *Next scan in 15 minutes*
-"""
-        keyboard = InlineKeyboardMarkup()
-        keyboard.add(InlineKeyboardButton("🔄 Try Again", callback_data="free_signal"))
-        keyboard.add(InlineKeyboardButton("👑 VIP Early Access", callback_data="vip_channel"))
-        keyboard.add(InlineKeyboardButton("🔙 Back", callback_data="back_menu"))
-        
-        bot.edit_message_text(error_text, call.message.chat.id, call.message.message_id,
-                             parse_mode='Markdown', reply_markup=keyboard)
-        bot.answer_callback_query(call.id, "No signal currently. Try again later!")
-        return
-    
-    # Format and send signal
-    signal_text = signal_gen.format_signal_message(signal, is_vip=False)
-    
-    keyboard = InlineKeyboardMarkup()
-    keyboard.add(InlineKeyboardButton("🔄 New Signal", callback_data="free_signal"))
-    keyboard.add(InlineKeyboardButton("👑 Get VIP", callback_data="vip_channel"))
-    keyboard.add(InlineKeyboardButton("🔙 Back", callback_data="back_menu"))
-    
-    bot.edit_message_text(signal_text, call.message.chat.id, call.message.message_id,
-                         parse_mode='Markdown', reply_markup=keyboard)
-    
-    # Increment free count
-    free_signal_count[user_id] = free_signal_count.get(user_id, 0) + 1
-    save_free_count()
-    
-    # Send to public channel if configured
-    if PUBLIC_CHANNEL:
+    try:
+        uid = message.text.split()[1]
+        vip_users[uid] = {"activated": datetime.now().isoformat()}
+        save_data()
+        bot.reply_to(message, f"✅ VIP added for {uid}")
         try:
-            bot.send_message(PUBLIC_CHANNEL, signal_text, parse_mode='Markdown')
-            logger.info(f"Signal sent to public channel at {datetime.now()}")
-        except Exception as e:
-            logger.error(f"Error sending to public channel: {e}")
-    
-    bot.answer_callback_query(call.id, f"📊 Signal generated! {3 - free_signal_count[user_id]} free left")
+            bot.send_message(int(uid), f"🎉 VIP access activated! Join: {VIP_LINK}", parse_mode='Markdown')
+        except:
+            pass
+    except:
+        bot.reply_to(message, "Usage: /addvip [user_id]")
 
-# --------------------- LIVE RATES ---------------------
+@bot.message_handler(commands=['resetfree'])
+def reset_free(message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    try:
+        uid = message.text.split()[1]
+        free_signal_count[uid] = 0
+        save_data()
+        bot.reply_to(message, f"✅ Free count reset for {uid}")
+    except:
+        bot.reply_to(message, "Usage: /resetfree [user_id]")
 
-@bot.callback_query_handler(func=lambda call: call.data == "live_rates")
-def live_rates_handler(call):
-    from market_data import MarketData
-    md = MarketData()
-    
-    pairs = {
-        "XAUUSD=X": "🟡 Gold",
-        "EURUSD=X": "💶 EUR/USD",
-        "GBPUSD=X": "💷 GBP/USD",
-        "BTC-USD": "₿ Bitcoin",
-        "NQ=F": "📊 NAS100"
-    }
-    
-    rates_text = "📈 *Live Market Rates*\n\n"
-    
-    for symbol, name in pairs.items():
-        price = md.get_live_price(symbol)
-        if price:
-            rates_text += f"{name}: ${price:.2f}\n"
-        else:
-            rates_text += f"{name}: 🔴 Offline\n"
-    
-    rates_text += f"\n⏰ Updated: {datetime.now().strftime('%H:%M:%S')} IST"
-    
-    keyboard = InlineKeyboardMarkup()
-    keyboard.add(InlineKeyboardButton("🔄 Refresh", callback_data="live_rates"))
-    keyboard.add(InlineKeyboardButton("🔙 Back", callback_data="back_menu"))
-    
-    bot.edit_message_text(rates_text, call.message.chat.id, call.message.message_id,
-                         parse_mode='Markdown', reply_markup=keyboard)
-    bot.answer_callback_query(call.id)
+@bot.message_handler(commands=['broadcast'])
+def broadcast(message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    msg = message.text.replace('/broadcast', '').strip()
+    if not msg:
+        bot.reply_to(message, "Usage: /broadcast [message]")
+        return
+    cnt = 0
+    for uid in user_data:
+        try:
+            bot.send_message(int(uid), f"📢 *Announcement*\n\n{msg}", parse_mode='Markdown')
+            cnt += 1
+        except:
+            pass
+    bot.reply_to(message, f"✅ Sent to {cnt} users")
 
-# --------------------- VIP CHANNEL ---------------------
+@bot.message_handler(commands=['stats'])
+def stats(message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    txt = f"""
+📊 *Bot Stats*
 
-@bot.callback_query_handler(func=lambda call: call.data == "vip_channel")
-def vip_channel_handler(call):
-    vip_text = f"""
-👑 *VIP CHANNEL* 👑
+👥 Users: {len(user_data)}
+👑 VIP: {len(vip_users)}
+📊 Active: {len(user_data)}
 
-*VIP Benefits:*
-• 25-30 Premium Signals Daily
-• Early Entry (5-10 min before public)
-• Live Market Analysis
-• 1-on-1 VIP Support
-• 89% Win Rate Guarantee
+📈 Today's signals:
+👑 VIP: {signal_gen.vip_signals_today}/30
+📊 Public: {signal_gen.public_signals_today}/10
 
-💰 *Price:* {VIP_PRICE}
-
-👇 *Join now for instant access*
+💰 VIP Price: {VIP_PRICE}
 """
-    bot.edit_message_text(vip_text, call.message.chat.id, call.message.message_id,
-                         parse_mode='Markdown', reply_markup=vip_menu())
-    bot.answer_callback_query(call.id)
+    bot.reply_to(message, txt, parse_mode='Markdown')
 
-# --------------------- PAYMENT INFO ---------------------
+@bot.message_handler(commands=['forcesignal'])
+def force_signal(message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    bot.reply_to(message, "🔍 Generating...")
+    vip_sig = signal_gen.get_best_signal("vip")
+    pub_sig = signal_gen.get_best_signal("public")
+    if vip_sig and VIP_CHANNEL:
+        bot.send_message(VIP_CHANNEL, signal_gen.format_vip_signal(vip_sig), parse_mode='Markdown')
+        signal_gen.increment_vip_count()
+    if pub_sig and PUBLIC_CHANNEL:
+        bot.send_message(PUBLIC_CHANNEL, signal_gen.format_public_signal(pub_sig), parse_mode='Markdown')
+        signal_gen.increment_public_count()
+    bot.reply_to(message, f"✅ VIP: {signal_gen.vip_signals_today}/30, Public: {signal_gen.public_signals_today}/10")
 
-@bot.callback_query_handler(func=lambda call: call.data == "payment_info")
-def payment_info_handler(call):
-    payment_text = f"""
-💳 *Payment Details*
-
-💰 *VIP Plan:* {VIP_PRICE}
-
-*UPI Payment:*
+# === START ===
+if __name__ == "__main__":
+    print("="*70)
+    print("🤖 KAILASH FOREX SIGNAL BOT – PROFESSIONAL EDITION")
+    print("="*70)
+    print("✅ VIP: 25-30 signals/day + course promos")
+    print("✅ Public: 8-10 signals/day + VIP promos")
+    print("✅ Live data + RSI/MACD/MA analysis")
+    print("✅ Auto signals every hour")
+    print("✅ FOMO messages & confidence scores")
+    print("✅ Course selling system")
+    print("✅ Admin commands ready")
+    print(f"✅ Public Channel ID: {PUBLIC_CHANNEL}")
+    print(f"✅ VIP Channel ID: {VIP_CHANNEL}")
+    print("="*70)
+    bot.infinity_polling()

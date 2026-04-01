@@ -1,230 +1,288 @@
 import os
 import telebot
-import json
-import logging
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from datetime import datetime
+import threading
+import time
+import random
+import json
 
 # Bot token
 BOT_TOKEN = "8653450456:AAER9w6Gjj5IWkyCs1taa01N-DdMFZqxt3E"
 ADMIN_ID = 6253584826
-VIP_CHANNEL = -1003826269063  # Negative mein daalna for channel
-PUBLIC_CHANNEL = -1003807818260
+
+# Website details (from https://forexkailash.netlify.app)
+WEBSITE_URL = "https://forexkailash.netlify.app"
+UPI_ID = "kailashbhardwaj66-2@okicici"
+VIP_PRICE = "₹399/month"
+VIP_SIGNALS = "25-30 Premium Signals Daily"
+VIP_LINK = "https://t.me/+Snj0BVAwjDo3NTA1"
 
 # Bot define
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# Logging setup
-logging.basicConfig(level=logging.INFO)
-
 # User data storage
 user_data = {}
+vip_users = {}
+free_signal_count = {}  # Track how many free signals each user has seen
 
-# --------------------- COMMANDS ---------------------
+# Load existing data
+try:
+    with open('user_data.json', 'r') as f:
+        user_data = json.load(f)
+except:
+    pass
+
+try:
+    with open('vip_users.json', 'r') as f:
+        vip_users = json.load(f)
+except:
+    pass
+
+try:
+    with open('free_count.json', 'r') as f:
+        free_signal_count = json.load(f)
+except:
+    pass
+
+# --------------------- MAIN MENU BUTTONS ---------------------
+
+def main_menu():
+    """Main menu with 4 buttons"""
+    keyboard = InlineKeyboardMarkup(row_width=2)
+    buttons = [
+        InlineKeyboardButton("📊 Free Signals", callback_data="free_signals"),
+        InlineKeyboardButton("👑 VIP Channel", callback_data="vip_channel"),
+        InlineKeyboardButton("🌐 Website", callback_data="website"),
+        InlineKeyboardButton("📞 Support", callback_data="support")
+    ]
+    keyboard.add(*buttons)
+    return keyboard
+
+def vip_join_menu():
+    """VIP channel join menu"""
+    keyboard = InlineKeyboardMarkup(row_width=1)
+    buttons = [
+        InlineKeyboardButton("👑 Join VIP Channel", url=VIP_LINK),
+        InlineKeyboardButton("💳 Payment Info", callback_data="payment_info"),
+        InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")
+    ]
+    keyboard.add(*buttons)
+    return keyboard
+
+def payment_menu():
+    """Payment options menu"""
+    keyboard = InlineKeyboardMarkup(row_width=1)
+    buttons = [
+        InlineKeyboardButton("✅ Verify Payment", callback_data="verify_payment"),
+        InlineKeyboardButton("🔙 Back to VIP", callback_data="vip_channel")
+    ]
+    keyboard.add(*buttons)
+    return keyboard
+
+# --------------------- START COMMAND ---------------------
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    user_id = message.from_user.id
-    user_data[user_id] = {"status": "active"}
+    user_id = str(message.from_user.id)
     
-    welcome_text = """
-🚀 *Forex Trading Bot Active!*
+    # Save user
+    if user_id not in user_data:
+        user_data[user_id] = {
+            "name": message.from_user.first_name,
+            "username": message.from_user.username,
+            "joined_date": datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            "status": "active"
+        }
+        save_user_data()
+    
+    # Reset free signal count for new user
+    if user_id not in free_signal_count:
+        free_signal_count[user_id] = 0
+        save_free_count()
+    
+    welcome_text = f"""
+🌟 *Welcome {message.from_user.first_name}!* 🌟
 
-✅ Bot is ready to send signals
-📊 Get accurate forex signals
-💹 Real-time market analysis
+*📈 Forex Trading With Kailash*
+India's Most Trusted Forex Signals Provider | 5000+ Happy Traders
 
-*Available Commands:*
-/start - Start the bot
-/help - Get help
-/signal - Get current signal
-/status - Check bot status
+*📊 Stats:*
+🎯 Win Rate: 89%
+👥 Active Traders: 5000+
+⏰ Support: 24/7
 
-Join our VIP channel for premium signals!
+*Choose an option below:* 👇
 """
-    bot.reply_to(message, welcome_text, parse_mode='Markdown')
+    
+    bot.send_message(
+        message.chat.id, 
+        welcome_text, 
+        parse_mode='Markdown',
+        reply_markup=main_menu()
+    )
 
-@bot.message_handler(commands=['help'])
-def send_help(message):
-    help_text = """
-📖 *Help Center*
+# --------------------- FREE SIGNALS (Only 3) ---------------------
 
-*Basic Commands:*
-/start - Start the bot
-/help - Show this help
-/signal - Get latest trading signal
-/status - Bot status
+@bot.callback_query_handler(func=lambda call: call.data == "free_signals")
+def free_signals(call):
+    """Send free signals - max 3 then ask to join VIP"""
+    user_id = str(call.from_user.id)
+    
+    # Initialize count if not exists
+    if user_id not in free_signal_count:
+        free_signal_count[user_id] = 0
+    
+    # Check if user has already seen 3 free signals
+    if free_signal_count[user_id] >= 3:
+        limit_reached_text = """
+⚠️ *Free Signal Limit Reached* ⚠️
 
-*VIP Features:*
-- Exclusive signals
-- Early access
-- Higher accuracy
+You have already received 3 free signals.
 
-*Contact Admin:* @ForexKailash
+🌟 *Join VIP Channel for Unlimited Signals!* 🌟
+
+*VIP Benefits:*
+• 25-30 Premium Signals Daily
+• Early Entry Alerts
+• Live Market Analysis
+• 1-on-1 VIP Support
+• 89% Win Rate Guarantee
+
+💰 *Price:* ₹399/month
+
+👇 *Click below to join VIP*
 """
-    bot.reply_to(message, help_text, parse_mode='Markdown')
-
-@bot.message_handler(commands=['signal'])
-def send_signal(message):
-    user_id = message.from_user.id
+        keyboard = InlineKeyboardMarkup()
+        keyboard.add(InlineKeyboardButton("👑 Join VIP Channel", url=VIP_LINK))
+        keyboard.add(InlineKeyboardButton("💳 Payment Info", callback_data="payment_info"))
+        keyboard.add(InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu"))
+        
+        bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text=limit_reached_text,
+            parse_mode='Markdown',
+            reply_markup=keyboard
+        )
+        bot.answer_callback_query(call.id, "⚠️ Limit reached! Join VIP for more signals.")
+        return
     
-    # Check if user is VIP or normal
-    if user_id == ADMIN_ID:
-        signal_text = generate_signal("premium")
-    else:
-        signal_text = generate_signal("normal")
+    # Generate and send free signal
+    signal = generate_free_signal()
     
-    bot.reply_to(message, signal_text, parse_mode='Markdown')
-
-@bot.message_handler(commands=['status'])
-def send_status(message):
-    status_text = """
-📊 *Bot Status*
-
-✅ Bot: *Active*
-📈 Signals: *Ready*
-🔄 Uptime: *24/7*
-👥 Users Active: *{}*
-
-*Bot is running smoothly!*
-""".format(len(user_data))
+    # Increment counter
+    free_signal_count[user_id] += 1
+    save_free_count()
     
-    bot.reply_to(message, status_text, parse_mode='Markdown')
-
-# --------------------- SIGNAL GENERATION ---------------------
-
-def generate_signal(level="normal"):
-    """Generate trading signals"""
+    remaining = 3 - free_signal_count[user_id]
     
-    import random
+    signal_text = f"""
+{signal}
+
+---
+📊 *Free Signals Remaining:* {remaining}/3
+💎 *Join VIP for unlimited signals!*
+"""
+    
+    keyboard = InlineKeyboardMarkup()
+    keyboard.add(InlineKeyboardButton("🔄 Next Signal", callback_data="free_signals"))
+    keyboard.add(InlineKeyboardButton("👑 Join VIP", callback_data="vip_channel"))
+    keyboard.add(InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu"))
+    
+    bot.edit_message_text(
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        text=signal_text,
+        parse_mode='Markdown',
+        reply_markup=keyboard
+    )
+    bot.answer_callback_query(call.id, f"📊 Free signal {free_signal_count[user_id]}/3")
+
+def generate_free_signal():
+    """Generate free trading signal"""
     from datetime import datetime
     
-    pairs = ["EUR/USD", "GBP/USD", "USD/JPY", "XAU/USD"]
+    pairs = ["XAU/USD (Gold)", "BTC/USD", "EUR/USD", "GBP/USD", "NAS100", "USOIL"]
     actions = ["BUY ✅", "SELL 🔻"]
-    confidence = ["High", "Medium", "Low"]
     
     pair = random.choice(pairs)
     action = random.choice(actions)
-    entry = round(random.uniform(1.0500, 1.2000), 4)
-    tp1 = round(entry + (0.0020 if "BUY" in action else -0.0020), 4)
-    tp2 = round(entry + (0.0040 if "BUY" in action else -0.0040), 4)
-    sl = round(entry + (0.0010 if "SELL" in action else -0.0010), 4)
+    
+    entry = round(random.uniform(1.0800, 1.1200), 4)
+    tp1 = round(entry + 0.0020, 4)
+    tp2 = round(entry + 0.0040, 4)
+    sl = round(entry - 0.0015, 4)
+    
+    if "Gold" in pair:
+        entry = random.randint(2150, 2180)
+        tp1 = entry + 15
+        tp2 = entry + 30
+        sl = entry - 10
+    elif "BTC" in pair:
+        entry = random.randint(65000, 68000)
+        tp1 = entry + 500
+        tp2 = entry + 1000
+        sl = entry - 300
     
     signal = f"""
-🔥 *FOREX SIGNAL* 🔥
+📊 *FREE SIGNAL*
 
-📌 *Pair:* {pair}
+📍 *Pair:* {pair}
 🎯 *Action:* {action}
 💰 *Entry:* {entry}
 ✅ *TP1:* {tp1}
 ✅ *TP2:* {tp2}
 ❌ *SL:* {sl}
-📊 *Confidence:* {random.choice(confidence)}
 
 *Trade wisely! Use proper risk management.*
-⏰ Time: {datetime.now().strftime('%H:%M:%S')}
+⏰ Time: {datetime.now().strftime('%H:%M:%S')} IST
 """
-    
-    if level == "premium":
-        signal += "\n🌟 *VIP SIGNAL* 🌟\nExtra profit potential!"
-    
     return signal
 
-# --------------------- ADMIN COMMANDS ---------------------
+# --------------------- VIP CHANNEL ---------------------
 
-@bot.message_handler(commands=['broadcast'])
-def broadcast_message(message):
-    if message.from_user.id != ADMIN_ID:
-        bot.reply_to(message, "❌ Unauthorized! Only admin can use this.")
-        return
+@bot.callback_query_handler(func=lambda call: call.data == "vip_channel")
+def vip_channel(call):
+    """Show VIP channel with join link"""
+    user_id = str(call.from_user.id)
     
-    msg = message.text.replace('/broadcast', '').strip()
-    if not msg:
-        bot.reply_to(message, "Usage: /broadcast [message]")
-        return
-    
-    success = 0
-    for user_id in user_data.keys():
-        try:
-            bot.send_message(user_id, f"📢 *Announcement*\n\n{msg}", parse_mode='Markdown')
-            success += 1
-        except:
-            pass
-    
-    bot.reply_to(message, f"✅ Broadcast sent to {success} users!")
+    vip_text = f"""
+👑 *VIP CHANNEL* 👑
 
-@bot.message_handler(commands=['stats'])
-def show_stats(message):
-    if message.from_user.id != ADMIN_ID:
-        return
-    
-    stats = f"""
-📊 *Bot Statistics*
+*India's Most Trusted Forex Signals Provider*
 
-👥 Total Users: {len(user_data)}
-✅ Active Users: {len(user_data)}
-📈 Signals Sent: Auto
-⏱️ Uptime: Continuous
+*VIP Benefits:*
+• {VIP_SIGNALS}
+• Early Entry Alerts (Before Market)
+• Live Market Analysis & News
+• 1-on-1 VIP Support
+• 89% Win Rate Guarantee
+• 5000+ Happy Traders
 
-*Bot is running perfectly!*
+💰 *Price:* {VIP_PRICE}
+
+👇 *Click below to join instantly*
 """
-    bot.reply_to(message, stats, parse_mode='Markdown')
-
-# --------------------- VIP CHANNEL MESSAGES ---------------------
-
-def send_vip_signal(signal_text):
-    """Send signals to VIP channel"""
-    try:
-        bot.send_message(VIP_CHANNEL, signal_text, parse_mode='Markdown')
-        print("VIP signal sent to channel")
-    except Exception as e:
-        print(f"Error sending to VIP channel: {e}")
-
-def send_public_signal(signal_text):
-    """Send signals to public channel"""
-    try:
-        bot.send_message(PUBLIC_CHANNEL, signal_text, parse_mode='Markdown')
-        print("Public signal sent to channel")
-    except Exception as e:
-        print(f"Error sending to public channel: {e}")
-
-# --------------------- AUTO SIGNAL (Every 4 hours) ---------------------
-
-import threading
-import time
-
-def auto_signal_sender():
-    """Send automatic signals every 4 hours"""
-    while True:
-        time.sleep(14400)  # 4 hours
-        
-        # Generate premium signal
-        premium_signal = generate_signal("premium")
-        send_vip_signal(premium_signal)
-        
-        # Generate normal signal
-        normal_signal = generate_signal("normal")
-        send_public_signal(normal_signal)
-        
-        print(f"Auto signals sent at {datetime.now()}")
-
-# Start auto signal thread
-signal_thread = threading.Thread(target=auto_signal_sender, daemon=True)
-signal_thread.start()
-
-# --------------------- MAIN ---------------------
-
-if __name__ == "__main__":
-    print("=" * 50)
-    print("🤖 FOREX TRADING BOT STARTED")
-    print("=" * 50)
-    print(f"Bot Name: @ForexKailash_Bot")
-    print(f"Admin ID: {ADMIN_ID}")
-    print(f"VIP Channel: {VIP_CHANNEL}")
-    print(f"Public Channel: {PUBLIC_CHANNEL}")
-    print("=" * 50)
-    print("✅ Bot is running...")
-    print("📊 Auto signals every 4 hours")
-    print("=" * 50)
     
-    # Start bot
-    bot.infinity_polling()
+    bot.edit_message_text(
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        text=vip_text,
+        parse_mode='Markdown',
+        reply_markup=vip_join_menu()
+    )
+    bot.answer_callback_query(call.id)
+
+# --------------------- PAYMENT INFO ---------------------
+
+@bot.callback_query_handler(func=lambda call: call.data == "payment_info")
+def payment_info(call):
+    """Show payment details"""
+    payment_text = f"""
+💳 *Payment Details*
+
+💰 *Plan:* VIP Monthly
+💵 *Amount:* {VIP_PRICE}
+
+*UPI Payment:*

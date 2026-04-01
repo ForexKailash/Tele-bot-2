@@ -320,34 +320,32 @@ def auto_signal_loop():
                         logging.info(f"Public signal sent ({signal_gen.public_signals_today}/10)")
                     except Exception as e:
                         logging.error(f"Public send error: {e}")
-        # Promotion in public channel every 4 hours
+        # Promotion in public channel every 4 hours (improved version)
         if hour % 4 == 0 and hour != last_promo_hour and PUBLIC_CHANNEL:
-            promo = """
-━━━━━━━━━━━━━━━━━━━━━━
-🌟 *VIP CHANNEL PROMOTION* 🌟
+            promo = f"""
+🔥 *EXCLUSIVE VIP ACCESS – LIMITED SEATS* 🔥
 
-🚀 Upgrade to VIP Today!
+✨ *Upgrade to VIP & Get:*
+• 25-30 Premium Signals/Day (vs 8-10 free)
+• ⏰ Early Entry – 5-10 min before public
+• 📊 Live Market Analysis & News
+• 💬 1-on-1 VIP Support
+• 🎯 89% Proven Win Rate
 
-✨ *VIP Benefits:*
-• 25-30 Premium Signals/Day
-• Early Entry (5-10 min before public)
-• Live Market Analysis
-• 1-on-1 VIP Support
-• 89% Win Rate
+💰 *Only {VIP_PRICE}*  
+🎓 *VIP + Course Bundle:* ₹9999 (Save ₹2999)
 
-💰 Only ₹399/month
-🎓 VIP + Course Bundle: ₹9999
+💳 *Pay:* `{UPI_ID}`  
+📱 *Join:* @ForexKailash after payment
 
-💳 UPI: kailashbhardwaj66-2@okicici
-👉 Join: @ForexKailash
-━━━━━━━━━━━━━━━━━━━━━━
+⏳ *Limited spots available – don't miss out!*
 """
             try:
                 bot.send_message(PUBLIC_CHANNEL, promo, parse_mode='Markdown')
                 last_promo_hour = hour
                 logging.info("Promotion sent")
-            except:
-                pass
+            except Exception as e:
+                logging.error(f"Promotion send error: {e}")
         time.sleep(3600)  # check every hour
 
 threading.Thread(target=auto_signal_loop, daemon=True).start()

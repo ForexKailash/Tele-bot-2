@@ -11,20 +11,20 @@ import json
 BOT_TOKEN = "8653450456:AAER9w6Gjj5IWkyCs1taa01N-DdMFZqxt3E"
 ADMIN_ID = 6253584826
 
-# Website details (from https://forexkailash.netlify.app)
+# Website details
 WEBSITE_URL = "https://forexkailash.netlify.app"
 UPI_ID = "kailashbhardwaj66-2@okicici"
 VIP_PRICE = "₹399/month"
 VIP_SIGNALS = "25-30 Premium Signals Daily"
 VIP_LINK = "https://t.me/+Snj0BVAwjDo3NTA1"
 
-# Bot define
+# Bot define - YAHI IMPORTANT HAI!
 bot = telebot.TeleBot(BOT_TOKEN)
 
 # User data storage
 user_data = {}
 vip_users = {}
-free_signal_count = {}  # Track how many free signals each user has seen
+free_signal_count = {}
 
 # Load existing data
 try:
@@ -48,7 +48,6 @@ except:
 # --------------------- MAIN MENU BUTTONS ---------------------
 
 def main_menu():
-    """Main menu with 4 buttons"""
     keyboard = InlineKeyboardMarkup(row_width=2)
     buttons = [
         InlineKeyboardButton("📊 Free Signals", callback_data="free_signals"),
@@ -60,7 +59,6 @@ def main_menu():
     return keyboard
 
 def vip_join_menu():
-    """VIP channel join menu"""
     keyboard = InlineKeyboardMarkup(row_width=1)
     buttons = [
         InlineKeyboardButton("👑 Join VIP Channel", url=VIP_LINK),
@@ -71,7 +69,6 @@ def vip_join_menu():
     return keyboard
 
 def payment_menu():
-    """Payment options menu"""
     keyboard = InlineKeyboardMarkup(row_width=1)
     buttons = [
         InlineKeyboardButton("✅ Verify Payment", callback_data="verify_payment"),
@@ -86,7 +83,6 @@ def payment_menu():
 def send_welcome(message):
     user_id = str(message.from_user.id)
     
-    # Save user
     if user_id not in user_data:
         user_data[user_id] = {
             "name": message.from_user.first_name,
@@ -96,7 +92,6 @@ def send_welcome(message):
         }
         save_user_data()
     
-    # Reset free signal count for new user
     if user_id not in free_signal_count:
         free_signal_count[user_id] = 0
         save_free_count()
@@ -122,18 +117,15 @@ India's Most Trusted Forex Signals Provider | 5000+ Happy Traders
         reply_markup=main_menu()
     )
 
-# --------------------- FREE SIGNALS (Only 3) ---------------------
+# --------------------- FREE SIGNALS ---------------------
 
 @bot.callback_query_handler(func=lambda call: call.data == "free_signals")
 def free_signals(call):
-    """Send free signals - max 3 then ask to join VIP"""
     user_id = str(call.from_user.id)
     
-    # Initialize count if not exists
     if user_id not in free_signal_count:
         free_signal_count[user_id] = 0
     
-    # Check if user has already seen 3 free signals
     if free_signal_count[user_id] >= 3:
         limit_reached_text = """
 ⚠️ *Free Signal Limit Reached* ⚠️
@@ -150,8 +142,6 @@ You have already received 3 free signals.
 • 89% Win Rate Guarantee
 
 💰 *Price:* ₹399/month
-
-👇 *Click below to join VIP*
 """
         keyboard = InlineKeyboardMarkup()
         keyboard.add(InlineKeyboardButton("👑 Join VIP Channel", url=VIP_LINK))
@@ -165,13 +155,9 @@ You have already received 3 free signals.
             parse_mode='Markdown',
             reply_markup=keyboard
         )
-        bot.answer_callback_query(call.id, "⚠️ Limit reached! Join VIP for more signals.")
         return
     
-    # Generate and send free signal
     signal = generate_free_signal()
-    
-    # Increment counter
     free_signal_count[user_id] += 1
     save_free_count()
     
@@ -197,10 +183,8 @@ You have already received 3 free signals.
         parse_mode='Markdown',
         reply_markup=keyboard
     )
-    bot.answer_callback_query(call.id, f"📊 Free signal {free_signal_count[user_id]}/3")
 
 def generate_free_signal():
-    """Generate free trading signal"""
     from datetime import datetime
     
     pairs = ["XAU/USD (Gold)", "BTC/USD", "EUR/USD", "GBP/USD", "NAS100", "USOIL"]
@@ -235,7 +219,6 @@ def generate_free_signal():
 ✅ *TP2:* {tp2}
 ❌ *SL:* {sl}
 
-*Trade wisely! Use proper risk management.*
 ⏰ Time: {datetime.now().strftime('%H:%M:%S')} IST
 """
     return signal
@@ -244,27 +227,20 @@ def generate_free_signal():
 
 @bot.callback_query_handler(func=lambda call: call.data == "vip_channel")
 def vip_channel(call):
-    """Show VIP channel with join link"""
-    user_id = str(call.from_user.id)
-    
     vip_text = f"""
 👑 *VIP CHANNEL* 👑
 
-*India's Most Trusted Forex Signals Provider*
-
 *VIP Benefits:*
 • {VIP_SIGNALS}
-• Early Entry Alerts (Before Market)
-• Live Market Analysis & News
+• Early Entry Alerts
+• Live Market Analysis
 • 1-on-1 VIP Support
 • 89% Win Rate Guarantee
-• 5000+ Happy Traders
 
 💰 *Price:* {VIP_PRICE}
 
-👇 *Click below to join instantly*
+👇 *Click below to join*
 """
-    
     bot.edit_message_text(
         chat_id=call.message.chat.id,
         message_id=call.message.message_id,
@@ -272,13 +248,11 @@ def vip_channel(call):
         parse_mode='Markdown',
         reply_markup=vip_join_menu()
     )
-    bot.answer_callback_query(call.id)
 
 # --------------------- PAYMENT INFO ---------------------
 
 @bot.callback_query_handler(func=lambda call: call.data == "payment_info")
 def payment_info(call):
-    """Show payment details"""
     payment_text = f"""
 💳 *Payment Details*
 

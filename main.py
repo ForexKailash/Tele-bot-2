@@ -12,14 +12,18 @@ import requests
 from flask import Flask, request
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
+# Import our advanced modules
+from analysis import generate_signal, get_live_price
+from promotions import get_hype_promo
+
 # ============================================
-# HARDCODED CONFIGURATION (ALL YOUR DETAILS)
+# HARDCODED CONFIGURATION (YOUR DETAILS)
 # ============================================
 BOT_TOKEN = "8653450456:AAER9w6Gjj5IWkyCs1taa01N-DdMFZqxt3E"
 ADMIN_ID = 6253584826
-PUBLIC_CHANNEL_ID = "-1003807818260"   # Your public channel ID
+PUBLIC_CHANNEL_ID = "-1003807818260"
 PUBLIC_CHANNEL_LINK = "https://t.me/tradewithkailashh"
-VIP_CHANNEL_ID = "-1003826269063"      # Your VIP channel ID
+VIP_CHANNEL_ID = "-1003826269063"
 VIP_CHANNEL_LINK = "https://t.me/+Snj0BVAwjDo3NTA1"
 FREE_CHANNEL = PUBLIC_CHANNEL_LINK
 WEBSITE_URL = "https://forexkailash.netlify.app"
@@ -27,20 +31,18 @@ COURSE_URL = "https://forexkailash.netlify.app/course"
 UPI_ID = "kailashbhardwaj66-2@okicici"
 CONTACT_USERNAME = "@forexkailash"
 
-# Webhook URL – REPLACE with your actual Railway domain after deployment
 WEBHOOK_URL = "https://tele-bot-2-production.up.railway.app"
 PORT = int(os.environ.get("PORT", 8443))
 
 print("=" * 60)
-print("🤖 KAILASH FOREX SIGNAL BOT - FINAL ERROR-FREE")
+print("🤖 KAILASH FOREX SIGNAL BOT - ADVANCED ANALYSIS EDITION")
 print(f"Admin: {CONTACT_USERNAME}")
 print(f"Public channel: {PUBLIC_CHANNEL_LINK}")
 print(f"VIP channel: {VIP_CHANNEL_LINK}")
-print(f"Webhook URL: {WEBHOOK_URL}")
 print("=" * 60)
 
 # ============================================
-# HEALTH CHECK SERVER (for Railway)
+# HEALTH CHECK SERVER
 # ============================================
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -58,152 +60,26 @@ def run_health_server():
 threading.Thread(target=run_health_server, daemon=True).start()
 
 # ============================================
-# TRADING SYMBOLS (14 reliable pairs)
+# TRADING SYMBOLS (same as before)
 # ============================================
 SYMBOLS = [
-    {"name": "XAU/USD", "ticker": "GC=F", "emoji": "🥇", "decimals": 2, "tp1_pct": 0.004, "tp2_pct": 0.008, "sl_pct": 0.003, "type": "commodity"},
-    {"name": "BTC/USD", "ticker": "BTC-USD", "emoji": "₿", "decimals": 0, "tp1_pct": 0.006, "tp2_pct": 0.012, "sl_pct": 0.004, "type": "crypto"},
-    {"name": "EUR/USD", "ticker": "EURUSD=X", "emoji": "💶", "decimals": 5, "tp1_pct": 0.003, "tp2_pct": 0.006, "sl_pct": 0.002, "type": "forex"},
-    {"name": "USOIL", "ticker": "CL=F", "emoji": "🛢️", "decimals": 2, "tp1_pct": 0.005, "tp2_pct": 0.010, "sl_pct": 0.003, "type": "commodity"},
-    {"name": "GBP/USD", "ticker": "GBPUSD=X", "emoji": "💷", "decimals": 5, "tp1_pct": 0.003, "tp2_pct": 0.006, "sl_pct": 0.002, "type": "forex"},
-    {"name": "USD/JPY", "ticker": "JPY=X", "emoji": "🇯🇵", "decimals": 3, "tp1_pct": 0.003, "tp2_pct": 0.005, "sl_pct": 0.002, "type": "forex"},
-    {"name": "ETH/USD", "ticker": "ETH-USD", "emoji": "💎", "decimals": 1, "tp1_pct": 0.007, "tp2_pct": 0.014, "sl_pct": 0.005, "type": "crypto"},
-    {"name": "NAS100", "ticker": "NQ=F", "emoji": "📈", "decimals": 0, "tp1_pct": 0.004, "tp2_pct": 0.008, "sl_pct": 0.003, "type": "index"},
-    {"name": "SILVER", "ticker": "SI=F", "emoji": "🥈", "decimals": 3, "tp1_pct": 0.005, "tp2_pct": 0.010, "sl_pct": 0.003, "type": "commodity"},
-    {"name": "AUD/USD", "ticker": "AUDUSD=X", "emoji": "🦘", "decimals": 5, "tp1_pct": 0.003, "tp2_pct": 0.006, "sl_pct": 0.002, "type": "forex"},
-    {"name": "GBP/JPY", "ticker": "GBPJPY=X", "emoji": "⚡", "decimals": 3, "tp1_pct": 0.004, "tp2_pct": 0.008, "sl_pct": 0.003, "type": "forex"},
-    {"name": "US30", "ticker": "YM=F", "emoji": "🏛️", "decimals": 0, "tp1_pct": 0.003, "tp2_pct": 0.006, "sl_pct": 0.002, "type": "index"},
-    {"name": "USD/CAD", "ticker": "USDCAD=X", "emoji": "🍁", "decimals": 5, "tp1_pct": 0.003, "tp2_pct": 0.006, "sl_pct": 0.002, "type": "forex"},
+    {"name": "XAU/USD", "ticker": "GC=F", "emoji": "🥇", "decimals": 2, "type": "commodity"},
+    {"name": "BTC/USD", "ticker": "BTC-USD", "emoji": "₿", "decimals": 0, "type": "crypto"},
+    {"name": "EUR/USD", "ticker": "EURUSD=X", "emoji": "💶", "decimals": 5, "type": "forex"},
+    {"name": "USOIL", "ticker": "CL=F", "emoji": "🛢️", "decimals": 2, "type": "commodity"},
+    {"name": "GBP/USD", "ticker": "GBPUSD=X", "emoji": "💷", "decimals": 5, "type": "forex"},
+    {"name": "USD/JPY", "ticker": "JPY=X", "emoji": "🇯🇵", "decimals": 3, "type": "forex"},
+    {"name": "ETH/USD", "ticker": "ETH-USD", "emoji": "💎", "decimals": 1, "type": "crypto"},
+    {"name": "NAS100", "ticker": "NQ=F", "emoji": "📈", "decimals": 0, "type": "index"},
+    {"name": "SILVER", "ticker": "SI=F", "emoji": "🥈", "decimals": 3, "type": "commodity"},
+    {"name": "AUD/USD", "ticker": "AUDUSD=X", "emoji": "🦘", "decimals": 5, "type": "forex"},
+    {"name": "GBP/JPY", "ticker": "GBPJPY=X", "emoji": "⚡", "decimals": 3, "type": "forex"},
+    {"name": "US30", "ticker": "YM=F", "emoji": "🏛️", "decimals": 0, "type": "index"},
+    {"name": "USD/CAD", "ticker": "USDCAD=X", "emoji": "🍁", "decimals": 5, "type": "forex"},
 ]
 
-FALLBACK_PRICES = {
-    "GC=F": 4520.00, "BTC-USD": 68500.00, "EURUSD=X": 1.08750, "CL=F": 79.50,
-    "GBPUSD=X": 1.26800, "JPY=X": 150.50, "ETH-USD": 3550.00, "NQ=F": 18700.00,
-    "SI=F": 27.80, "AUDUSD=X": 0.65500, "GBPJPY=X": 190.80, "YM=F": 39300.00,
-    "USDCAD=X": 1.36000,
-}
-
 # ============================================
-# SIMPLE TECHNICAL ANALYSIS (no pandas-ta, no errors)
-# ============================================
-def get_live_price(ticker):
-    try:
-        data = yf.download(ticker, period="1d", interval="5m", progress=False, timeout=5)
-        if not data.empty:
-            return float(data["Close"].iloc[-1])
-    except Exception:
-        pass
-    return FALLBACK_PRICES.get(ticker, 1000.00)
-
-def get_sma(ticker, period=20):
-    try:
-        data = yf.download(ticker, period="60d", interval="1d", progress=False, timeout=8)
-        if not data.empty:
-            sma = data["Close"].rolling(period).mean().iloc[-1]
-            current = data["Close"].iloc[-1]
-            return current, sma
-    except Exception:
-        pass
-    return None, None
-
-def get_rsi(ticker, period=14):
-    try:
-        data = yf.download(ticker, period="60d", interval="1d", progress=False, timeout=8)
-        if not data.empty and len(data) > period:
-            delta = data["Close"].diff()
-            gain = delta.where(delta > 0, 0).rolling(window=period).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-            rs = gain / loss
-            rsi = 100 - (100 / (1 + rs.iloc[-1]))
-            return rsi
-    except Exception:
-        pass
-    return 50
-
-def get_technical_analysis(ticker, asset_name):
-    current, sma20 = get_sma(ticker, 20)
-    rsi = get_rsi(ticker, 14)
-    if current is not None and sma20 is not None:
-        if current > sma20:
-            direction = "BUY"
-            confidence = 70
-            reason = f"Price above 20-day SMA (${sma20:.2f}), uptrend intact. RSI: {rsi:.1f}"
-        else:
-            direction = "SELL"
-            confidence = 70
-            reason = f"Price below 20-day SMA (${sma20:.2f}), downtrend intact. RSI: {rsi:.1f}"
-        holding = "short"
-        holding_text = "Short-term (1-2 days)"
-        return direction, confidence, reason, holding, holding_text
-    else:
-        direction = random.choice(["BUY", "SELL"])
-        confidence = 60
-        reason = f"Market analysis using fallback logic for {asset_name}"
-        holding = "short"
-        holding_text = "Short-term (1-2 days)"
-        return direction, confidence, reason, holding, holding_text
-
-def generate_accurate_signal(symbol=None):
-    if symbol is None:
-        symbol = random.choice(SYMBOLS)
-    
-    direction, confidence, tech_reason, holding, holding_text = get_technical_analysis(symbol["ticker"], symbol["name"])
-    price = get_live_price(symbol["ticker"])
-    d = symbol["decimals"]
-    spread = price * 0.0005
-    
-    if direction == "BUY":
-        entry_low = round(price - spread, d)
-        entry_high = round(price + spread, d)
-        if holding == "long":
-            tp1 = round(price * (1 + symbol["tp1_pct"] * 1.5), d)
-            tp2 = round(price * (1 + symbol["tp2_pct"] * 2.0), d)
-            sl = round(price * (1 - symbol["sl_pct"] * 1.2), d)
-        else:
-            tp1 = round(price * (1 + symbol["tp1_pct"] * 0.8), d)
-            tp2 = round(price * (1 + symbol["tp2_pct"] * 0.9), d)
-            sl = round(price * (1 - symbol["sl_pct"] * 0.9), d)
-    else:
-        entry_low = round(price - spread, d)
-        entry_high = round(price + spread, d)
-        if holding == "long":
-            tp1 = round(price * (1 - symbol["tp1_pct"] * 1.5), d)
-            tp2 = round(price * (1 - symbol["tp2_pct"] * 2.0), d)
-            sl = round(price * (1 + symbol["sl_pct"] * 1.2), d)
-        else:
-            tp1 = round(price * (1 - symbol["tp1_pct"] * 0.8), d)
-            tp2 = round(price * (1 - symbol["tp2_pct"] * 0.9), d)
-            sl = round(price * (1 + symbol["sl_pct"] * 0.9), d)
-    
-    # Safety: ensure TP/SL are different from entry
-    if tp1 == entry_low:
-        tp1 = entry_low + (0.01 if d <= 2 else 0.00001)
-    if tp2 == tp1:
-        tp2 = tp1 + (0.02 if d <= 2 else 0.00002)
-    if sl == entry_high:
-        sl = entry_high - (0.01 if d <= 2 else 0.00001)
-    
-    return {
-        "symbol": symbol["name"],
-        "ticker": symbol["ticker"],
-        "emoji": symbol["emoji"],
-        "direction": direction,
-        "entry_low": entry_low,
-        "entry_high": entry_high,
-        "tp1": tp1,
-        "tp2": tp2,
-        "sl": sl,
-        "price": price,
-        "decimals": d,
-        "analysis": tech_reason,
-        "confidence": confidence,
-        "holding": holding,
-        "holding_text": holding_text,
-        "accuracy": confidence
-    }
-
-# ============================================
-# DATABASE SETUP
+# DATABASE SETUP (unchanged)
 # ============================================
 os.makedirs("telegram_bot", exist_ok=True)
 conn = sqlite3.connect("telegram_bot/users.db", check_same_thread=False)
@@ -290,7 +166,7 @@ def get_ist_time():
     return datetime.datetime.utcnow() + IST_OFFSET
 
 # ============================================
-# SIGNAL TEMPLATES (with TP/SL, analysis, holding)
+# SIGNAL TEMPLATES (using new analysis)
 # ============================================
 def public_signal_post(d):
     ist = get_ist_time()
@@ -349,55 +225,23 @@ def vip_signal_post(d):
 🔥 Next signal in 10-15 mins!"""
 
 def build_public_signal():
-    d = generate_accurate_signal()
+    symbol = random.choice(SYMBOLS)
+    d = generate_signal(symbol)   # uses advanced analysis from analysis.py
     sid = save_signal_to_db(d, "public")
     return public_signal_post(d), sid
 
 def build_vip_signal(symbol=None):
-    d = generate_accurate_signal(symbol)
+    if symbol is None:
+        symbol = random.choice(SYMBOLS)
+    d = generate_signal(symbol)
     sid = save_signal_to_db(d, "vip")
     return vip_signal_post(d), sid
 
 # ============================================
-# PROMOTIONAL MESSAGES (30+ unique, Indian English)
+# PROMOTIONS (using hype messages)
 # ============================================
-PROMO_MESSAGES = [
-    f"💎 *FREE SIGNALS MILTE HAIN* daily! Join free channel: {PUBLIC_CHANNEL_LINK}\n⭐ VIP me early entry + 30-35 signals/day sirf ₹399! {VIP_CHANNEL_LINK}",
-    f"🚀 *Aaj hi 3 logon ne VIP join kiya aur profit book kiya!* Tum kab aa rahe ho? {VIP_CHANNEL_LINK}",
-    f"📊 *Free channel me signal delay hota hai.* VIP me entry 30 min pehle milti hai. Fark dekho: {VIP_CHANNEL_LINK}",
-    f"💰 *₹399/month mein kya milega?* 30-35 premium signals, early entry, 1-on-1 support. ROI 3600%+! Join: {VIP_CHANNEL_LINK}",
-    f"⚠️ *Limited slots!* Sirf {random.randint(3,7)} VIP seats bachi hain. Price soon ₹599. Lock ₹399 now: {VIP_CHANNEL_LINK}",
-    f"🏆 *89% win rate* - proof hai mere channel pe. Free signals dekh lo, phir VIP decide karo. Free channel: {PUBLIC_CHANNEL_LINK}",
-    f"🎯 *Aaj ka GOLD signal TP2 hit!* +250 pips. VIP members ko early entry mili thi. Tum bhi lo: {VIP_CHANNEL_LINK}",
-    f"📚 *FREE FOREX MASTERCLASS* - VIP members ko ₹2,999 ka course free. DM {CONTACT_USERNAME} after joining VIP.",
-    f"💬 *Testimonial:* 'Joined VIP, 10x subscription fee wapas kama liya first month.' - Rahul, Mumbai. Join now: {VIP_CHANNEL_LINK}",
-    f"⏰ *Price hike warning!* Next month ₹599. Abhi ₹399 mein lock karo lifetime: {VIP_CHANNEL_LINK}",
-    f"🔥 *Copy trading available* - Mere trades automatically copy karo. VIP members ke liye. Join: {VIP_CHANNEL_LINK}",
-    f"📈 *Daily 8-10 free signals* milte hain free channel pe. Par early entry sirf VIP ko. Dono join karo: {PUBLIC_CHANNEL_LINK} | {VIP_CHANNEL_LINK}",
-    f"💎 *Kailash sir khud dete hain signals* - 7+ years experience. Trusted by 5000+ traders. VIP link: {VIP_CHANNEL_LINK}",
-    f"🎁 *Special offer:* Pehle 10 VIP members ko free course. Hurry up! {VIP_CHANNEL_LINK}",
-    f"📊 *Free vs VIP difference:* Free = delayed entry, 3-5 signals. VIP = early entry, 30-35 signals. Choose wisely: {VIP_CHANNEL_LINK}",
-    f"💸 *Kal ka profit:* VIP members ne ₹8,000+ banaye sirf 2 trades se. Miss mat karo: {VIP_CHANNEL_LINK}",
-    f"🚨 *BREAKING:* Gold breakout coming. VIP ko 30 min pehle pata chalega. Join fast: {VIP_CHANNEL_LINK}",
-    f"🎓 *Course + Signals combo* - VIP special ₹1,499 only (50% off). DM {CONTACT_USERNAME} for details.",
-    f"💬 *FAQ:* UPI payment accept hai. Pay ₹399 to {UPI_ID}, screenshot bhejo, channel link milega. Simple!",
-    f"🌟 *Trusted by 5000+ Indian traders.* Aao tum bhi team mein: {VIP_CHANNEL_LINK}",
-    f"📱 *Telegram par 24/7 support* - VIP members ko priority response. Join: {VIP_CHANNEL_LINK}",
-    f"⚡ *Momentum trade alert* - 4H timeframe pe setup bana hai. VIP ko pehle milega. {VIP_CHANNEL_LINK}",
-    f"💎 *Gold, Crypto, Forex, Indices* - sab pe signals. Ek baar VIP try karo: {VIP_CHANNEL_LINK}",
-    f"🎯 *Today's target:* 3 VIP signals already in profit. Join abhi: {VIP_CHANNEL_LINK}",
-    f"📢 *FREE channel join karo* - daily 8-10 signals. Phir VIP upgrade karna easy rahega: {PUBLIC_CHANNEL_LINK}",
-    f"💡 *Risk management sikhoge* VIP me. Kailash sir guide karte hain. ₹399 only: {VIP_CHANNEL_LINK}",
-    f"🏆 *Kaun banega crorepati?* Mere VIP members consistently profitable hain. Tum bano: {VIP_CHANNEL_LINK}",
-    f"🔄 *Auto copy-trade setup help* - VIP members ko free. DM {CONTACT_USERNAME} after joining.",
-    f"📊 *Weekly review:* VIP members ka average profit this week ₹12,000. Miss mat karo: {VIP_CHANNEL_LINK}",
-    f"⏳ *Last chance* - Sirf {random.randint(2,5)} seats left at ₹399. Next price ₹599. {VIP_CHANNEL_LINK}",
-    f"🎓 *Want to learn trading?* Course + Signals combo best hai. DM {CONTACT_USERNAME} for offer.",
-    f"💎 *Kailash Forex Masterclass* - Limited time 50% off for VIP. Enroll: {COURSE_URL}",
-]
-
 def get_random_promo():
-    return random.choice(PROMO_MESSAGES)
+    return get_hype_promo(PUBLIC_CHANNEL_LINK, VIP_CHANNEL_LINK, CONTACT_USERNAME, UPI_ID, COURSE_URL)
 
 def send_promo_to_all_users():
     while True:
@@ -408,7 +252,7 @@ def send_promo_to_all_users():
                 try:
                     bot.send_message(uid, get_random_promo(), parse_mode="Markdown")
                     time.sleep(0.5)
-                except Exception:
+                except:
                     pass
             print(f"✅ Promos sent to {len(users)} users at {get_ist_time().strftime('%H:%M')}")
         except Exception as e:
@@ -416,22 +260,23 @@ def send_promo_to_all_users():
         time.sleep(1800)
 
 # ============================================
-# PRICE MONITOR (TP/SL HIT DETECTION)
+# PRICE MONITOR (TP/SL HIT DETECTION) - improved hype
 # ============================================
 TP_HYPE = [
     "🎯🔥 *TARGET HIT!* 🔥🎯\n\n{symbol} {direction} → *{tp} ✅ REACHED!*\n\n+{profit} {unit} profit!\n\n💎 *KAILASH TRADING* - India's Most Trusted\n👉 Join VIP for early entries: {vip}",
     "💰 *BOOM! TP HIT!* 💰\n\n{symbol} → *{tp} SMASHED!* 🎯\n*{direction} +{profit} {unit}*\n⭐ *Win Rate {accuracy}%* | VIP: {vip}",
+    "🏆 *PROFIT BOOKED!* 🏆\n\n{symbol} {direction} → {tp} achieved! +{profit} {unit}\n\nThis is why {accuracy}% of our trades win.\n👉 Upgrade to VIP: {vip}",
 ]
 
 def price_monitor():
     while True:
-        time.sleep(180)
+        time.sleep(180)  # every 3 minutes
         try:
             pending = get_pending_signals()
             for row in pending:
                 (sig_id, symbol, direction, entry, tp1, tp2, sl, decimals,
                  msg_id, ticker, result, ch_type, accuracy) = row
-                current = get_live_price(ticker)
+                current = get_live_price(ticker)  # from analysis.py
                 if current is None:
                     continue
                 is_vip = (ch_type == "vip")
@@ -555,7 +400,7 @@ def public_scheduler():
         time.sleep(1800)
 
 # ============================================
-# TELEGRAM BOT COMMANDS
+# TELEGRAM BOT COMMANDS (unchanged)
 # ============================================
 def main_keyboard():
     kb = telebot.types.InlineKeyboardMarkup(row_width=2)
@@ -621,7 +466,8 @@ def free_cmd(msg):
         bot.reply_to(msg, f"🚫 Free limit reached. Join VIP: /vip", parse_mode="Markdown")
         return
     increment_signal_count(uid)
-    d = generate_accurate_signal()
+    symbol = random.choice(SYMBOLS)
+    d = generate_signal(symbol)
     dec = d["decimals"]
     tp1_str = f"{d['tp1']:.{dec}f}" if dec > 0 else str(int(d["tp1"]))
     tp2_str = f"{d['tp2']:.{dec}f}" if dec > 0 else str(int(d["tp2"]))

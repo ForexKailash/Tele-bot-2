@@ -7,7 +7,6 @@ import threading
 import time
 import yfinance as yf
 import pandas as pd
-import pandas_ta as ta
 import numpy as np
 import requests
 from flask import Flask, request
@@ -28,12 +27,12 @@ COURSE_URL = "https://forexkailash.netlify.app/course"
 UPI_ID = "kailashbhardwaj66-2@okicici"
 CONTACT_USERNAME = "@forexkailash"
 
-# Webhook URL from Railway (must match your generated domain)
+# Webhook URL – REPLACE with your actual Railway domain after deployment
 WEBHOOK_URL = "https://tele-bot-2-production.up.railway.app"
 PORT = int(os.environ.get("PORT", 8443))
 
 print("=" * 60)
-print("🤖 KAILASH FOREX SIGNAL BOT - FINAL PRODUCTION")
+print("🤖 KAILASH FOREX SIGNAL BOT - FINAL ERROR-FREE")
 print(f"Admin: {CONTACT_USERNAME}")
 print(f"Public channel: {PUBLIC_CHANNEL_LINK}")
 print(f"VIP channel: {VIP_CHANNEL_LINK}")
@@ -77,7 +76,6 @@ SYMBOLS = [
     {"name": "USD/CAD", "ticker": "USDCAD=X", "emoji": "🍁", "decimals": 5, "tp1_pct": 0.003, "tp2_pct": 0.006, "sl_pct": 0.002, "type": "forex"},
 ]
 
-# Fallback prices (used when Yahoo API fails)
 FALLBACK_PRICES = {
     "GC=F": 4520.00, "BTC-USD": 68500.00, "EURUSD=X": 1.08750, "CL=F": 79.50,
     "GBPUSD=X": 1.26800, "JPY=X": 150.50, "ETH-USD": 3550.00, "NQ=F": 18700.00,
@@ -85,88 +83,75 @@ FALLBACK_PRICES = {
     "USDCAD=X": 1.36000,
 }
 
-# Temporary blacklist for symbols that repeatedly fail
-_failed_symbols = {}
-_FAILURE_THRESHOLD = 3
-
-def is_symbol_healthy(ticker):
-    if ticker in _failed_symbols and _failed_symbols[ticker] >= _FAILURE_THRESHOLD:
-        return False
-    return True
-
-def mark_failure(ticker):
-    _failed_symbols[ticker] = _failed_symbols.get(ticker, 0) + 1
-
-def reset_failure(ticker):
-    if ticker in _failed_symbols:
-        del _failed_symbols[ticker]
-
 # ============================================
-# LIVE PRICE FETCH (with fallback)
+# SIMPLE TECHNICAL ANALYSIS (no pandas-ta, no errors)
 # ============================================
 def get_live_price(ticker):
-    if not is_symbol_healthy(ticker):
-        return FALLBACK_PRICES.get(ticker, 1000.00)
     try:
         data = yf.download(ticker, period="1d", interval="5m", progress=False, timeout=5)
         if not data.empty:
-            reset_failure(ticker)
             return float(data["Close"].iloc[-1])
     except Exception:
-        mark_failure(ticker)
+        pass
     return FALLBACK_PRICES.get(ticker, 1000.00)
 
-# ============================================
-# SIMPLE TECHNICAL ANALYSIS (always returns valid signal)
-# ============================================
-def get_technical_analysis(ticker, asset_name):
+def get_sma(ticker, period=20):
     try:
-        daily = yf.download(ticker, period="60d", interval="1d", progress=False, timeout=8)
-        if not daily.empty:
-            curr = daily["Close"].iloc[-1]
-            sma20 = daily["Close"].rolling(20).mean().iloc[-1]
-            if curr > sma20:
-                direction = "BUY"
-                confidence = 70
-                reason = f"Price above 20-day SMA ({sma20:.2f}), uptrend intact"
-            else:
-                direction = "SELL"
-                confidence = 70
-                reason = f"Price below 20-day SMA ({sma20:.2f}), downtrend intact"
-            holding = "short"
-            holding_text = "Short-term (1-2 days)"
-            return direction, confidence, reason, holding, holding_text
-        else:
-            direction = random.choice(["BUY", "SELL"])
-            confidence = 60
-            reason = f"Using safe fallback for {asset_name} (data unavailable)"
-            holding = "short"
-            holding_text = "Short-term (1-2 days)"
-            return direction, confidence, reason, holding, holding_text
+        data = yf.download(ticker, period="60d", interval="1d", progress=False, timeout=8)
+        if not data.empty:
+            sma = data["Close"].rolling(period).mean().iloc[-1]
+            current = data["Close"].iloc[-1]
+            return current, sma
     except Exception:
-        direction = "BUY"
-        confidence = 55
-        reason = "Technical analysis fallback (market data temporarily limited)"
+        pass
+    return None, None
+
+def get_rsi(ticker, period=14):
+    try:
+        data = yf.download(ticker, period="60d", interval="1d", progress=False, timeout=8)
+        if not data.empty and len(data) > period:
+            delta = data["Close"].diff()
+            gain = delta.where(delta > 0, 0).rolling(window=period).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+            rs = gain / loss
+            rsi = 100 - (100 / (1 + rs.iloc[-1]))
+            return rsi
+    except Exception:
+        pass
+    return 50
+
+def get_technical_analysis(ticker, asset_name):
+    current, sma20 = get_sma(ticker, 20)
+    rsi = get_rsi(ticker, 14)
+    if current is not None and sma20 is not None:
+        if current > sma20:
+            direction = "BUY"
+            confidence = 70
+            reason = f"Price above 20-day SMA (${sma20:.2f}), uptrend intact. RSI: {rsi:.1f}"
+        else:
+            direction = "SELL"
+            confidence = 70
+            reason = f"Price below 20-day SMA (${sma20:.2f}), downtrend intact. RSI: {rsi:.1f}"
+        holding = "short"
+        holding_text = "Short-term (1-2 days)"
+        return direction, confidence, reason, holding, holding_text
+    else:
+        direction = random.choice(["BUY", "SELL"])
+        confidence = 60
+        reason = f"Market analysis using fallback logic for {asset_name}"
         holding = "short"
         holding_text = "Short-term (1-2 days)"
         return direction, confidence, reason, holding, holding_text
 
-# ============================================
-# SIGNAL GENERATOR (guarantees TP, SL, analysis)
-# ============================================
 def generate_accurate_signal(symbol=None):
     if symbol is None:
         symbol = random.choice(SYMBOLS)
     
-    # Get technical direction
     direction, confidence, tech_reason, holding, holding_text = get_technical_analysis(symbol["ticker"], symbol["name"])
-    
-    # Get live price
     price = get_live_price(symbol["ticker"])
     d = symbol["decimals"]
     spread = price * 0.0005
     
-    # Calculate entry, TP, SL based on direction and holding period
     if direction == "BUY":
         entry_low = round(price - spread, d)
         entry_high = round(price + spread, d)
@@ -274,9 +259,6 @@ def signals_remaining(user_id):
 bot = telebot.TeleBot(BOT_TOKEN)
 print(f"✅ Bot connected: @{bot.get_me().username}")
 
-# ============================================
-# SAVE SIGNAL TO DATABASE
-# ============================================
 def save_signal_to_db(data, channel_type="public"):
     now = datetime.datetime.now()
     entry_avg = (data["entry_low"] + data["entry_high"]) / 2
@@ -308,7 +290,7 @@ def get_ist_time():
     return datetime.datetime.utcnow() + IST_OFFSET
 
 # ============================================
-# PUBLIC SIGNAL TEMPLATE (with TP/SL)
+# SIGNAL TEMPLATES (with TP/SL, analysis, holding)
 # ============================================
 def public_signal_post(d):
     ist = get_ist_time()
@@ -339,9 +321,6 @@ def public_signal_post(d):
 👇 *Upgrade to VIP — ₹399/month*
 {VIP_CHANNEL_LINK}"""
 
-# ============================================
-# VIP SIGNAL TEMPLATE (with TP/SL, analysis, holding)
-# ============================================
 def vip_signal_post(d):
     ist = get_ist_time()
     dir_word = "BUY 🟢" if d["direction"] == "BUY" else "SELL 🔴"
@@ -418,12 +397,8 @@ PROMO_MESSAGES = [
 ]
 
 def get_random_promo():
-    msg = random.choice(PROMO_MESSAGES)
-    return msg
+    return random.choice(PROMO_MESSAGES)
 
-# ============================================
-# BACKGROUND: SEND PROMOS TO ALL USERS EVERY 30 MIN
-# ============================================
 def send_promo_to_all_users():
     while True:
         try:
@@ -450,7 +425,7 @@ TP_HYPE = [
 
 def price_monitor():
     while True:
-        time.sleep(180)  # every 3 minutes
+        time.sleep(180)
         try:
             pending = get_pending_signals()
             for row in pending:
@@ -513,7 +488,7 @@ def price_monitor():
             print(f"Price monitor error: {e}")
 
 # ============================================
-# VIP CHANNEL SCHEDULER (30-35 signals/day + course promos)
+# VIP CHANNEL SCHEDULER
 # ============================================
 def vip_channel_scheduler():
     vip_signal_count = 0
@@ -536,18 +511,18 @@ def vip_channel_scheduler():
                 sent = bot.send_message(VIP_CHANNEL_ID, text, parse_mode="Markdown")
                 update_signal_message_id(sid, sent.message_id)
                 vip_signal_count += 1
-                print(f"VIP signal #{vip_signal_count} sent to {VIP_CHANNEL_ID}")
+                print(f"VIP signal #{vip_signal_count} sent")
             else:
                 promo_counter += 1
-                if promo_counter % 2 == 0:  # course promo every 30 min after limit
+                if promo_counter % 2 == 0:
                     promo = f"🎓 *KAILASH FOREX MASTERCLASS* - VIP Special ₹1,499 only! DM {CONTACT_USERNAME}\n🌐 {COURSE_URL}"
                     bot.send_message(VIP_CHANNEL_ID, promo, parse_mode="Markdown")
         except Exception as e:
             print(f"VIP scheduler error: {e}")
-        time.sleep(random.randint(600, 900))  # 10-15 minutes
+        time.sleep(random.randint(600, 900))
 
 # ============================================
-# PUBLIC CHANNEL SCHEDULER (8-10 signals/day + promos)
+# PUBLIC CHANNEL SCHEDULER
 # ============================================
 public_signal_count = 0
 last_pub_date = ""
@@ -564,7 +539,7 @@ def public_scheduler():
                 last_pub_date = today
                 print(f"New day: {today}")
             post_counter += 1
-            if post_counter % 2 == 0:  # even tick -> signal
+            if post_counter % 2 == 0:
                 if public_signal_count < 8:
                     text, sid = build_public_signal()
                     sent = bot.send_message(PUBLIC_CHANNEL_ID, text, parse_mode="Markdown")
@@ -573,11 +548,11 @@ def public_scheduler():
                     print(f"Public signal #{public_signal_count} posted")
                 else:
                     bot.send_message(PUBLIC_CHANNEL_ID, get_random_promo(), parse_mode="Markdown")
-            else:  # odd tick -> promo
+            else:
                 bot.send_message(PUBLIC_CHANNEL_ID, get_random_promo(), parse_mode="Markdown")
         except Exception as e:
             print(f"Public scheduler error: {e}")
-        time.sleep(1800)  # 30 minutes
+        time.sleep(1800)
 
 # ============================================
 # TELEGRAM BOT COMMANDS

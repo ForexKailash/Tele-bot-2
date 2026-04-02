@@ -28,18 +28,16 @@ COURSE_URL = 'https://forexkailash.netlify.app/course'
 UPI_ID = 'kailashbhardwaj66-2@okicici'
 CONTACT_USERNAME = '@forexkailash'
 
-# Webhook URL from Railway environment
 WEBHOOK_URL = os.environ.get('WEBHOOK_URL', '')
 
 print("=" * 60)
-print("🤖 KAILASH FOREX SIGNAL BOT - WEBHOOK EDITION")
+print("🤖 KAILASH FOREX SIGNAL BOT - ULTIMATE PROMO EDITION")
 print(f"Admin: {CONTACT_USERNAME}")
 print(f"VIP Channel ID: {VIP_CHANNEL_ID}")
-print(f"Webhook URL: {WEBHOOK_URL or 'Not set, using polling'}")
 print("=" * 60)
 
 # ============================================
-# HEALTH CHECK SERVER (for Railway)
+# HEALTH CHECK SERVER
 # ============================================
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -61,7 +59,7 @@ def run_health_server():
 threading.Thread(target=run_health_server, daemon=True).start()
 
 # ============================================
-# RELIABLE SYMBOLS
+# RELIABLE SYMBOLS (All working)
 # ============================================
 SYMBOLS = [
     {"name": "XAU/USD", "ticker": "GC=F", "emoji": "🥇", "decimals": 2, "tp1_pct": 0.004, "tp2_pct": 0.008, "sl_pct": 0.003, "type": "commodity"},
@@ -87,7 +85,7 @@ FALLBACK_PRICES = {
 }
 
 # ============================================
-# NEWS SENTIMENT (free GNews API)
+# NEWS SENTIMENT (free)
 # ============================================
 def get_news_sentiment(asset_name):
     try:
@@ -97,23 +95,23 @@ def get_news_sentiment(asset_name):
             data = response.json()
             articles = data.get('articles', [])
             if articles:
-                positive_words = ['surge', 'rally', 'gain', 'bullish', 'up', 'higher', 'breakout', 'strong']
-                negative_words = ['drop', 'fall', 'bearish', 'down', 'lower', 'crash', 'weak', 'decline']
+                pos_words = ['surge', 'rally', 'gain', 'bullish', 'up', 'higher', 'breakout', 'strong']
+                neg_words = ['drop', 'fall', 'bearish', 'down', 'lower', 'crash', 'weak', 'decline']
                 score = 0
-                for article in articles:
-                    title = article.get('title', '').lower()
-                    for w in positive_words:
+                for art in articles:
+                    title = art.get('title', '').lower()
+                    for w in pos_words:
                         if w in title:
                             score += 1
-                    for w in negative_words:
+                    for w in neg_words:
                         if w in title:
                             score -= 1
                 if score > 0:
-                    return "bullish", f"Positive news sentiment (+{score})"
+                    return "bullish", f"Positive news (+{score})"
                 elif score < 0:
-                    return "bearish", f"Negative news sentiment ({score})"
+                    return "bearish", f"Negative news ({score})"
                 else:
-                    return "neutral", "Mixed/neutral news"
+                    return "neutral", "Mixed news"
     except:
         pass
     return "neutral", "No clear news bias"
@@ -136,10 +134,8 @@ def get_technical_analysis(ticker, asset_name):
     try:
         daily = fetch_safe_data(ticker, "60d", "1d")
         four_hour = fetch_safe_data(ticker, "30d", "60m")
-        
         if daily.empty:
             return None, 0, "No data", "short", "Short-term (1-2 days)"
-        
         daily['rsi'] = ta.rsi(daily['Close'], length=14)
         daily['ema9'] = ta.ema(daily['Close'], length=9)
         daily['ema21'] = ta.ema(daily['Close'], length=21)
@@ -150,30 +146,24 @@ def get_technical_analysis(ticker, asset_name):
         else:
             daily['macd'] = 0
             daily['signal'] = 0
-        
         recent_high = daily['High'].tail(20).max()
         recent_low = daily['Low'].tail(20).min()
-        current_price = daily['Close'].iloc[-1]
-        
+        curr = daily['Close'].iloc[-1]
         daily_trend = "bullish" if daily['ema9'].iloc[-1] > daily['ema21'].iloc[-1] else "bearish"
         daily_rsi = daily['rsi'].iloc[-1] if not pd.isna(daily['rsi'].iloc[-1]) else 50
         daily_macd_bull = daily['macd'].iloc[-1] > daily['signal'].iloc[-1]
-        
         four_hour_trend = "neutral"
         if not four_hour.empty and len(four_hour) > 20:
             four_hour['ema9'] = ta.ema(four_hour['Close'], length=9)
             four_hour['ema21'] = ta.ema(four_hour['Close'], length=21)
             if not pd.isna(four_hour['ema9'].iloc[-1]) and not pd.isna(four_hour['ema21'].iloc[-1]):
                 four_hour_trend = "bullish" if four_hour['ema9'].iloc[-1] > four_hour['ema21'].iloc[-1] else "bearish"
-        
         bullish_score = 0
         bearish_score = 0
-        
         if daily_trend == "bullish":
             bullish_score += 3
         else:
             bearish_score += 3
-        
         if daily_rsi < 30:
             bullish_score += 2
             rsi_signal = "oversold"
@@ -182,26 +172,22 @@ def get_technical_analysis(ticker, asset_name):
             rsi_signal = "overbought"
         else:
             rsi_signal = "neutral"
-        
         if daily_macd_bull:
             bullish_score += 2
         else:
             bearish_score += 2
-        
         if four_hour_trend == "bullish":
             bullish_score += 2
         elif four_hour_trend == "bearish":
             bearish_score += 2
-        
-        if current_price <= recent_low * 1.005:
+        if curr <= recent_low * 1.005:
             bullish_score += 2
             sr_signal = "near support"
-        elif current_price >= recent_high * 0.995:
+        elif curr >= recent_high * 0.995:
             bearish_score += 2
             sr_signal = "near resistance"
         else:
             sr_signal = "neutral"
-        
         if bullish_score > bearish_score + 2:
             direction = "BUY"
             confidence = min(85, 60 + (bullish_score - bearish_score) * 3)
@@ -225,7 +211,6 @@ def get_technical_analysis(ticker, asset_name):
             confidence = 55
             holding = "short"
             holding_text = "Short-term (1-2 days)"
-        
         reason = f"Daily: {daily_trend.upper()}, RSI {daily_rsi:.0f} ({rsi_signal}), MACD {'bullish' if daily_macd_bull else 'bearish'}. 4H: {four_hour_trend.upper()}. Price {sr_signal}."
         return direction, confidence, reason, holding, holding_text
     except Exception as e:
@@ -246,13 +231,10 @@ def get_live_price(ticker):
 def generate_accurate_signal(symbol=None, include_news=True):
     if symbol is None:
         symbol = random.choice(SYMBOLS)
-    
     tech_dir, confidence, tech_reason, holding, holding_text = get_technical_analysis(symbol["ticker"], symbol["name"])
     news_dir, news_reason = get_news_sentiment(symbol["name"].split('/')[0]) if include_news else ("neutral", "")
-    
     final_dir = tech_dir if tech_dir else "BUY"
     final_confidence = confidence if confidence else 55
-    
     if news_dir != "neutral" and news_dir == final_dir.lower():
         final_confidence = min(90, final_confidence + 10)
         combined_reason = f"{tech_reason} + {news_reason}"
@@ -260,11 +242,9 @@ def generate_accurate_signal(symbol=None, include_news=True):
         combined_reason = tech_reason
         if news_dir != "neutral":
             combined_reason += f" (News {news_dir} but technical neutral)"
-    
     price = get_live_price(symbol["ticker"])
     d = symbol["decimals"]
     spread = price * 0.0005
-    
     if final_dir == "BUY":
         entry_low = round(price - spread, d)
         entry_high = round(price + spread, d)
@@ -287,7 +267,6 @@ def generate_accurate_signal(symbol=None, include_news=True):
             tp1 = round(price * (1 - symbol["tp1_pct"] * 0.8), d)
             tp2 = round(price * (1 - symbol["tp2_pct"] * 0.9), d)
             sl = round(price * (1 + symbol["sl_pct"] * 0.9), d)
-    
     return {
         "symbol": symbol["name"], "ticker": symbol["ticker"], "emoji": symbol["emoji"],
         "direction": final_dir, "entry_low": entry_low, "entry_high": entry_high,
@@ -302,11 +281,24 @@ def generate_accurate_signal(symbol=None, include_news=True):
 os.makedirs("telegram_bot", exist_ok=True)
 conn = sqlite3.connect('telegram_bot/users.db', check_same_thread=False)
 c = conn.cursor()
-c.execute('''CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, name TEXT, email TEXT, phone TEXT, register_date TEXT, is_vip INTEGER, last_promo_sent TEXT)''')
-c.execute('''CREATE TABLE IF NOT EXISTS registrations (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, name TEXT, email TEXT, phone TEXT, date TEXT)''')
-c.execute('''CREATE TABLE IF NOT EXISTS signal_usage (user_id INTEGER PRIMARY KEY, count INTEGER DEFAULT 0)''')
-c.execute('''CREATE TABLE IF NOT EXISTS channel_signals (id INTEGER PRIMARY KEY AUTOINCREMENT, symbol TEXT, direction TEXT, entry REAL, tp1 REAL, tp2 REAL, sl REAL, decimals INTEGER, sent_date TEXT, sent_time TEXT, result TEXT DEFAULT "pending", message_id INTEGER DEFAULT NULL, ticker TEXT, channel_type TEXT DEFAULT "public", accuracy INTEGER DEFAULT 85, timeframe TEXT, reason TEXT, holding TEXT)''')
-c.execute('''CREATE TABLE IF NOT EXISTS bot_settings (key TEXT PRIMARY KEY, value TEXT)''')
+c.execute('''CREATE TABLE IF NOT EXISTS users 
+             (user_id INTEGER PRIMARY KEY, name TEXT, email TEXT, phone TEXT, 
+              register_date TEXT, is_vip INTEGER, last_promo_sent TEXT, 
+              start_date TEXT)''')
+c.execute('''CREATE TABLE IF NOT EXISTS registrations 
+             (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, name TEXT, 
+              email TEXT, phone TEXT, date TEXT)''')
+c.execute('''CREATE TABLE IF NOT EXISTS signal_usage 
+             (user_id INTEGER PRIMARY KEY, count INTEGER DEFAULT 0)''')
+c.execute('''CREATE TABLE IF NOT EXISTS channel_signals 
+             (id INTEGER PRIMARY KEY AUTOINCREMENT, symbol TEXT, direction TEXT,
+              entry REAL, tp1 REAL, tp2 REAL, sl REAL, decimals INTEGER,
+              sent_date TEXT, sent_time TEXT, result TEXT DEFAULT "pending",
+              message_id INTEGER DEFAULT NULL, ticker TEXT,
+              channel_type TEXT DEFAULT "public", accuracy INTEGER DEFAULT 85,
+              timeframe TEXT, reason TEXT, holding TEXT)''')
+c.execute('''CREATE TABLE IF NOT EXISTS bot_settings 
+             (key TEXT PRIMARY KEY, value TEXT)''')
 conn.commit()
 
 def get_setting(key, default=None):
@@ -343,7 +335,8 @@ print(f"✅ Bot connected: {bot.get_me().username}")
 
 def save_signal_to_db(data, channel_type="public"):
     now = datetime.datetime.now()
-    c.execute("""INSERT INTO channel_signals (symbol, direction, entry, tp1, tp2, sl, decimals, sent_date, sent_time, ticker, channel_type, accuracy, timeframe, reason, holding)
+    c.execute("""INSERT INTO channel_signals 
+                 (symbol, direction, entry, tp1, tp2, sl, decimals, sent_date, sent_time, ticker, channel_type, accuracy, timeframe, reason, holding)
                  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
               (data["symbol"], data["direction"], (data["entry_low"]+data["entry_high"])/2,
                data["tp1"], data["tp2"], data["sl"], data["decimals"],
@@ -421,49 +414,86 @@ def build_channel_post():
     return random.choice(TEMPLATES)(d), sid
 
 # ============================================
-# PROMOTIONAL MESSAGES
+# 30+ UNIQUE PROMOTIONAL MESSAGES (Indian English, Hype)
 # ============================================
 PROMO_MESSAGES = [
-    f"💬 *WHAT OUR MEMBERS SAY* - Join VIP for ₹399/month! {VIP_CHANNEL_LINK}",
-    f"⏰ *LIMITED SLOTS* - Only few left! {VIP_CHANNEL_LINK}",
-    f"💰 *TODAY'S PROFIT* - VIP made ₹{random.randint(5000,15000)}! Join now: {VIP_CHANNEL_LINK}",
-    f"📚 *FREE MASTERCLASS* for VIP members! {VIP_CHANNEL_LINK}",
-    f"🏆 *89% WIN RATE* - Proven results. Join VIP: {VIP_CHANNEL_LINK}",
-    f"🚨 *NEXT SIGNAL IN 30 MIN* - Get early entry as VIP! {VIP_CHANNEL_LINK}",
-    f"💎 *BEST INVESTMENT* - ₹399/month → 3,600% ROI. {VIP_CHANNEL_LINK}",
-    f"🎁 *SPECIAL OFFER* - Free course for first 10 VIPs! {VIP_CHANNEL_LINK}",
-    f"📊 *FREE VS VIP* - VIP gets early entries. Upgrade now: {VIP_CHANNEL_LINK}",
-    f"🔔 *LAST CALL* - Slots filling fast! {VIP_CHANNEL_LINK}",
+    "💎 *FREE SIGNALS MILTE HAIN* daily! Join our free channel: {FREE_CHANNEL}\n⭐ VIP me early entry + 30-35 signals/day sirf ₹399! {VIP_CHANNEL_LINK}",
+    "🚀 *Aaj hi 3 logon ne VIP join kiya aur profit book kiya!* Tum kab aa rahe ho? {VIP_CHANNEL_LINK}",
+    "📊 *Free channel me signal delay hota hai.* VIP me entry 30 min pehle milti hai. Fark dekho: {VIP_CHANNEL_LINK}",
+    "💰 *₹399/month mein kya milega?* 30-35 premium signals, early entry, 1-on-1 support. ROI 3600%+! Join: {VIP_CHANNEL_LINK}",
+    "⚠️ *Limited slots!* Sirf {random.randint(3,7)} VIP seats bachi hain. Price soon ₹599. Lock ₹399 now: {VIP_CHANNEL_LINK}",
+    "🏆 *89% win rate* - proof hai mere channel pe. Free signals dekh lo, phir VIP decide karo. Free channel: {FREE_CHANNEL}",
+    "🎯 *Aaj ka GOLD signal TP2 hit!* +250 pips. VIP members ko early entry mili thi. Tum bhi lo: {VIP_CHANNEL_LINK}",
+    "📚 *FREE FOREX MASTERCLASS* - VIP members ko ₹2,999 ka course free. DM {CONTACT_USERNAME} after joining VIP.",
+    "💬 *Testimonial:* 'Joined VIP, 10x subscription fee wapas kama liya first month.' - Rahul, Mumbai. Join now: {VIP_CHANNEL_LINK}",
+    "⏰ *Price hike warning!* Next month ₹599. Abhi ₹399 mein lock karo lifetime: {VIP_CHANNEL_LINK}",
+    "🔥 *Copy trading available* - Mere trades automatically copy karo. VIP members ke liye. Join: {VIP_CHANNEL_LINK}",
+    "📈 *Daily 8-10 free signals* milte hain free channel pe. Par early entry sirf VIP ko. Dono join karo: {FREE_CHANNEL} | {VIP_CHANNEL_LINK}",
+    "💎 *Kailash sir khud dete hain signals* - 7+ years experience. Trusted by 5000+ traders. VIP link: {VIP_CHANNEL_LINK}",
+    "🎁 *Special offer:* Pehle 10 VIP members ko free course. Hurry up! {VIP_CHANNEL_LINK}",
+    "📊 *Free vs VIP difference:* Free = delayed entry, 3-5 signals. VIP = early entry, 30-35 signals. Choose wisely: {VIP_CHANNEL_LINK}",
+    "💸 *Kal ka profit:* VIP members ne ₹8,000+ banaye sirf 2 trades se. Miss mat karo: {VIP_CHANNEL_LINK}",
+    "🚨 *BREAKING:* Gold breakout coming. VIP ko 30 min pehle pata chalega. Join fast: {VIP_CHANNEL_LINK}",
+    "🎓 *Course + Signals combo* - VIP special ₹1,499 only (50% off). DM {CONTACT_USERNAME} for details.",
+    "💬 *FAQ:* UPI payment accept hai. Pay ₹399 to {UPI_ID}, screenshot bhejo, channel link milega. Simple!",
+    "🌟 *Trusted by 5000+ Indian traders.* Aao tum bhi team mein: {VIP_CHANNEL_LINK}",
+    "📱 *Telegram par 24/7 support* - VIP members ko priority response. Join: {VIP_CHANNEL_LINK}",
+    "⚡ *Momentum trade alert* - 4H timeframe pe setup bana hai. VIP ko pehle milega. {VIP_CHANNEL_LINK}",
+    "💎 *Gold, Crypto, Forex, Indices* - sab pe signals. Ek baar VIP try karo: {VIP_CHANNEL_LINK}",
+    "🎯 *Today's target:* 3 VIP signals already in profit. Join abhi: {VIP_CHANNEL_LINK}",
+    "📢 *FREE channel join karo* - daily 8-10 signals. Phir VIP upgrade karna easy rahega: {FREE_CHANNEL}",
+    "💡 *Risk management sikhoge* VIP me. Kailash sir guide karte hain. ₹399 only: {VIP_CHANNEL_LINK}",
+    "🏆 *Kaun banega crorepati?* Mere VIP members consistently profitable hain. Tum bano: {VIP_CHANNEL_LINK}",
+    "🔄 *Auto copy-trade setup help* - VIP members ko free. DM {CONTACT_USERNAME} after joining.",
+    "📊 *Weekly review:* VIP members ka average profit this week ₹12,000. Miss mat karo: {VIP_CHANNEL_LINK}",
+    "⏳ *Last chance* - Sirf {random.randint(2,5)} seats left at ₹399. Next price ₹599. {VIP_CHANNEL_LINK}",
+    "🎓 *Want to learn trading?* Course + Signals combo best hai. DM {CONTACT_USERNAME} for offer.",
+    "💎 *Kailash Forex Masterclass* - Limited time 50% off for VIP. Enroll: {COURSE_URL}",
 ]
 
-def get_promo():
-    return random.choice(PROMO_MESSAGES)
+def get_promo_for_user():
+    """Return a random promo message with placeholders replaced"""
+    msg = random.choice(PROMO_MESSAGES)
+    return msg.format(
+        FREE_CHANNEL=FREE_CHANNEL,
+        VIP_CHANNEL_LINK=VIP_CHANNEL_LINK,
+        CONTACT_USERNAME=CONTACT_USERNAME,
+        UPI_ID=UPI_ID,
+        COURSE_URL=COURSE_URL
+    )
 
 # ============================================
-# USER TARGETED PROMOS (every 30 min)
+# BACKGROUND THREAD: SEND PROMOS TO ALL USERS EVERY 30 MIN
 # ============================================
 def send_promo_to_all_users():
+    """Send a unique promo message to every user who has ever started the bot (every 30 min)"""
     while True:
         try:
-            c.execute("SELECT user_id FROM users WHERE register_date > datetime('now', '-7 days')")
+            # Get all users who have started the bot (either registered or just /start)
+            c.execute("SELECT user_id, last_promo_sent FROM users")
             users = c.fetchall()
-            for (uid,) in users:
+            now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            for (uid, last_sent) in users:
+                # Avoid sending too frequently (but we already run every 30 min, so fine)
                 try:
-                    promo_text = f"📢 *Join our FREE channel* for daily signals: {FREE_CHANNEL}\n\n⭐ *Upgrade to VIP* for early entries and 30-35 premium signals: {VIP_CHANNEL_LINK}\n\n📩 DM {CONTACT_USERNAME} for details!"
+                    promo_text = get_promo_for_user()
                     bot.send_message(uid, promo_text, parse_mode='Markdown')
-                    time.sleep(0.5)
-                except:
-                    pass
-            print(f"Sent promos to {len(users)} users at {get_ist_time().strftime('%H:%M')}")
+                    # Update last_promo_sent
+                    c.execute("UPDATE users SET last_promo_sent=? WHERE user_id=?", (now_str, uid))
+                    conn.commit()
+                    time.sleep(0.5)  # Respect rate limits
+                except Exception as e:
+                    print(f"Failed to send promo to {uid}: {e}")
+            print(f"✅ Promos sent to {len(users)} users at {get_ist_time().strftime('%H:%M')}")
         except Exception as e:
-            print(f"User promo error: {e}")
-        time.sleep(1800)
+            print(f"Promo sender error: {e}")
+        time.sleep(1800)  # 30 minutes
 
 # ============================================
 # PRICE MONITOR (TP/SL)
 # ============================================
 TP_HYPE = [
-    "🎯🔥 *TARGET HIT!* 🔥🎯\n\n{symbol} {direction} → *{tp} ✅ REACHED!*\n\n+{profit} {unit} profit!\n\n💎 *KAILASH TRADING* - India's Most Trusted\n👉 Join VIP: {vip}",
+    "🎯🔥 *TARGET HIT!* 🔥🎯\n\n{symbol} {direction} → *{tp} ✅ REACHED!*\n\n+{profit} {unit} profit!\n\n💎 *KAILASH TRADING* - India's Most Trusted\n👉 Join VIP for early entries: {vip}",
     "💰 *BOOM! TP HIT!* 💰\n\n{symbol} → *{tp} SMASHED!* 🎯\n*{direction} +{profit} {unit}*\n⭐ *Win Rate {accuracy}%* | VIP: {vip}",
 ]
 
@@ -584,7 +614,7 @@ def vip_channel_scheduler():
         time.sleep(random.randint(600, 900))
 
 # ============================================
-# PUBLIC SCHEDULER
+# PUBLIC SCHEDULER (8-10 signals + promos)
 # ============================================
 public_signal_count = 0
 last_pub_date = ""
@@ -609,9 +639,9 @@ def public_scheduler():
                     public_signal_count += 1
                     print(f"Public signal #{public_signal_count} posted")
                 else:
-                    bot.send_message(CHANNEL_ID, get_promo(), parse_mode='Markdown')
+                    bot.send_message(CHANNEL_ID, get_promo_for_user(), parse_mode='Markdown')
             else:
-                bot.send_message(CHANNEL_ID, get_promo(), parse_mode='Markdown')
+                bot.send_message(CHANNEL_ID, get_promo_for_user(), parse_mode='Markdown')
         except Exception as e:
             print(f"Public scheduler error: {e}")
         time.sleep(1800)
@@ -631,6 +661,13 @@ def main_keyboard():
 
 @bot.message_handler(commands=['start'])
 def start_cmd(msg):
+    uid = msg.from_user.id
+    # Add user to database if not exists (so they receive promos)
+    c.execute("SELECT user_id FROM users WHERE user_id=?", (uid,))
+    if not c.fetchone():
+        c.execute("INSERT INTO users (user_id, name, email, phone, register_date, is_vip, last_promo_sent, start_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                  (uid, msg.from_user.first_name or "User", "", "", str(datetime.datetime.now()), 0, str(datetime.datetime.now()), str(datetime.datetime.now())))
+        conn.commit()
     txt = f"""🚀 *Forex Trading With Kailash* 🚀
 
 India's Most Trusted Forex Signals Provider
@@ -661,8 +698,7 @@ def save_user(msg):
         name = data[0].strip()
         email = data[1].strip()
         phone = data[2].strip()
-        c.execute("INSERT OR REPLACE INTO users (user_id, name, email, phone, register_date, is_vip, last_promo_sent) VALUES (?,?,?,?,?,0,?)", 
-                  (uid, name, email, phone, str(datetime.datetime.now()), str(datetime.datetime.now())))
+        c.execute("UPDATE users SET name=?, email=?, phone=?, register_date=? WHERE user_id=?", (name, email, phone, str(datetime.datetime.now()), uid))
         c.execute("INSERT INTO registrations (user_id, name, email, phone, date) VALUES (?,?,?,?,?)", (uid, name, email, phone, str(datetime.datetime.now())))
         conn.commit()
         bot.send_message(ADMIN_ID, f"🔔 New registration: {name} (@{uname})")
@@ -747,10 +783,9 @@ def set_webhook():
             print(f"✅ Webhook set to {webhook_path}")
             return True
         except Exception as e:
-            print(f"❌ Failed to set webhook: {e}")
+            print(f"❌ Webhook failed: {e}")
     return False
 
-# Flask app for webhook
 flask_app = Flask(__name__)
 
 @flask_app.route('/webhook', methods=['POST'])
@@ -770,19 +805,17 @@ def index():
 # MAIN
 # ============================================
 if __name__ == "__main__":
-    print("Starting threads...")
+    print("Starting all threads...")
     threading.Thread(target=public_scheduler, daemon=True).start()
     threading.Thread(target=price_monitor, daemon=True).start()
     threading.Thread(target=vip_channel_scheduler, daemon=True).start()
     threading.Thread(target=send_promo_to_all_users, daemon=True).start()
-    
     if set_webhook():
         port = int(os.environ.get('PORT', 8080))
         print(f"🚀 Starting Flask webhook server on port {port}")
         flask_app.run(host='0.0.0.0', port=port)
     else:
         print("⚠️ Webhook failed, falling back to polling")
-        # Fallback to polling with retry
         while True:
             try:
                 bot.remove_webhook()

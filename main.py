@@ -31,7 +31,7 @@ CONTACT_USERNAME = '@forexkailash'
 WEBHOOK_URL = os.environ.get('WEBHOOK_URL', '')
 
 print("=" * 60)
-print("🤖 KAILASH FOREX SIGNAL BOT - ULTIMATE PROMO EDITION")
+print("🤖 KAILASH FOREX SIGNAL BOT - FIXED VIP TEMPLATE")
 print(f"Admin: {CONTACT_USERNAME}")
 print(f"VIP Channel ID: {VIP_CHANNEL_ID}")
 print("=" * 60)
@@ -59,7 +59,7 @@ def run_health_server():
 threading.Thread(target=run_health_server, daemon=True).start()
 
 # ============================================
-# RELIABLE SYMBOLS (All working)
+# SYMBOLS (with working tickers)
 # ============================================
 SYMBOLS = [
     {"name": "XAU/USD", "ticker": "GC=F", "emoji": "🥇", "decimals": 2, "tp1_pct": 0.004, "tp2_pct": 0.008, "sl_pct": 0.003, "type": "commodity"},
@@ -85,7 +85,7 @@ FALLBACK_PRICES = {
 }
 
 # ============================================
-# NEWS SENTIMENT (free)
+# NEWS SENTIMENT
 # ============================================
 def get_news_sentiment(asset_name):
     try:
@@ -117,25 +117,62 @@ def get_news_sentiment(asset_name):
     return "neutral", "No clear news bias"
 
 # ============================================
-# TECHNICAL ANALYSIS (Multi-timeframe)
+# IMPROVED DATA FETCHING (No error spam)
 # ============================================
+_failed_symbols = {}
+_FAILURE_THRESHOLD = 3
+
+def is_symbol_healthy(ticker):
+    if ticker in _failed_symbols and _failed_symbols[ticker] >= _FAILURE_THRESHOLD:
+        return False
+    return True
+
+def mark_failure(ticker):
+    _failed_symbols[ticker] = _failed_symbols.get(ticker, 0) + 1
+    if _failed_symbols[ticker] >= _FAILURE_THRESHOLD:
+        print(f"⚠️ {ticker} temporarily blacklisted")
+
+def reset_failure(ticker):
+    if ticker in _failed_symbols:
+        del _failed_symbols[ticker]
+
 def fetch_safe_data(ticker, period, interval):
-    for attempt in range(3):
+    if not is_symbol_healthy(ticker):
+        return pd.DataFrame()
+    for attempt in range(2):
         try:
-            data = yf.download(ticker, period=period, interval=interval, progress=False, timeout=10)
+            data = yf.download(ticker, period=period, interval=interval, progress=False, timeout=8)
             if not data.empty:
+                reset_failure(ticker)
                 return data
-        except:
-            pass
-        time.sleep(1)
+            else:
+                mark_failure(ticker)
+        except Exception:
+            mark_failure(ticker)
+        time.sleep(0.5)
     return pd.DataFrame()
 
+def get_live_price(ticker):
+    if not is_symbol_healthy(ticker):
+        return FALLBACK_PRICES.get(ticker, 1000.00)
+    try:
+        data = yf.download(ticker, period="1d", interval="5m", progress=False, timeout=5)
+        if not data.empty:
+            reset_failure(ticker)
+            return float(data["Close"].iloc[-1])
+    except:
+        mark_failure(ticker)
+    return FALLBACK_PRICES.get(ticker, 1000.00)
+
+# ============================================
+# TECHNICAL ANALYSIS
+# ============================================
 def get_technical_analysis(ticker, asset_name):
     try:
         daily = fetch_safe_data(ticker, "60d", "1d")
-        four_hour = fetch_safe_data(ticker, "30d", "60m")
         if daily.empty:
-            return None, 0, "No data", "short", "Short-term (1-2 days)"
+            return "BUY", 55, f"Fallback analysis for {asset_name}", "short", "Short-term (1-2 days)"
+        four_hour = fetch_safe_data(ticker, "30d", "60m")
         daily['rsi'] = ta.rsi(daily['Close'], length=14)
         daily['ema9'] = ta.ema(daily['Close'], length=9)
         daily['ema21'] = ta.ema(daily['Close'], length=21)
@@ -158,75 +195,64 @@ def get_technical_analysis(ticker, asset_name):
             four_hour['ema21'] = ta.ema(four_hour['Close'], length=21)
             if not pd.isna(four_hour['ema9'].iloc[-1]) and not pd.isna(four_hour['ema21'].iloc[-1]):
                 four_hour_trend = "bullish" if four_hour['ema9'].iloc[-1] > four_hour['ema21'].iloc[-1] else "bearish"
-        bullish_score = 0
-        bearish_score = 0
+        bullish = 0
+        bearish = 0
         if daily_trend == "bullish":
-            bullish_score += 3
+            bullish += 3
         else:
-            bearish_score += 3
+            bearish += 3
         if daily_rsi < 30:
-            bullish_score += 2
+            bullish += 2
             rsi_signal = "oversold"
         elif daily_rsi > 70:
-            bearish_score += 2
+            bearish += 2
             rsi_signal = "overbought"
         else:
             rsi_signal = "neutral"
         if daily_macd_bull:
-            bullish_score += 2
+            bullish += 2
         else:
-            bearish_score += 2
+            bearish += 2
         if four_hour_trend == "bullish":
-            bullish_score += 2
+            bullish += 2
         elif four_hour_trend == "bearish":
-            bearish_score += 2
+            bearish += 2
         if curr <= recent_low * 1.005:
-            bullish_score += 2
-            sr_signal = "near support"
+            bullish += 2
+            sr = "near support"
         elif curr >= recent_high * 0.995:
-            bearish_score += 2
-            sr_signal = "near resistance"
+            bearish += 2
+            sr = "near resistance"
         else:
-            sr_signal = "neutral"
-        if bullish_score > bearish_score + 2:
+            sr = "neutral"
+        if bullish > bearish + 2:
             direction = "BUY"
-            confidence = min(85, 60 + (bullish_score - bearish_score) * 3)
+            confidence = min(85, 60 + (bullish - bearish) * 3)
             if daily_trend == "bullish" and daily_rsi < 60:
-                holding = "long"
-                holding_text = "Long-term hold (3-7 days)"
+                hold = "long"
+                hold_text = "Long-term hold (3-7 days)"
             else:
-                holding = "short"
-                holding_text = "Short-term (1-2 days)"
-        elif bearish_score > bullish_score + 2:
+                hold = "short"
+                hold_text = "Short-term (1-2 days)"
+        elif bearish > bullish + 2:
             direction = "SELL"
-            confidence = min(85, 60 + (bearish_score - bullish_score) * 3)
+            confidence = min(85, 60 + (bearish - bullish) * 3)
             if daily_trend == "bearish" and daily_rsi > 40:
-                holding = "long"
-                holding_text = "Long-term hold (3-7 days)"
+                hold = "long"
+                hold_text = "Long-term hold (3-7 days)"
             else:
-                holding = "short"
-                holding_text = "Short-term (1-2 days)"
+                hold = "short"
+                hold_text = "Short-term (1-2 days)"
         else:
             direction = "BUY" if daily_trend == "bullish" else "SELL"
             confidence = 55
-            holding = "short"
-            holding_text = "Short-term (1-2 days)"
-        reason = f"Daily: {daily_trend.upper()}, RSI {daily_rsi:.0f} ({rsi_signal}), MACD {'bullish' if daily_macd_bull else 'bearish'}. 4H: {four_hour_trend.upper()}. Price {sr_signal}."
-        return direction, confidence, reason, holding, holding_text
+            hold = "short"
+            hold_text = "Short-term (1-2 days)"
+        reason = f"Daily: {daily_trend.upper()}, RSI {daily_rsi:.0f} ({rsi_signal}), MACD {'bullish' if daily_macd_bull else 'bearish'}. 4H: {four_hour_trend.upper()}. Price {sr}."
+        return direction, confidence, reason, hold, hold_text
     except Exception as e:
         print(f"Analysis error: {e}")
-        return None, 0, None, "short", "Short-term (1-2 days)"
-
-def get_live_price(ticker):
-    for attempt in range(3):
-        try:
-            data = yf.download(ticker, period="1d", interval="5m", progress=False, timeout=10)
-            if not data.empty:
-                return float(data["Close"].iloc[-1])
-        except:
-            pass
-        time.sleep(1)
-    return FALLBACK_PRICES.get(ticker, 1000.00)
+        return "BUY", 55, f"Analysis unavailable for {asset_name}", "short", "Short-term (1-2 days)"
 
 def generate_accurate_signal(symbol=None, include_news=True):
     if symbol is None:
@@ -234,14 +260,14 @@ def generate_accurate_signal(symbol=None, include_news=True):
     tech_dir, confidence, tech_reason, holding, holding_text = get_technical_analysis(symbol["ticker"], symbol["name"])
     news_dir, news_reason = get_news_sentiment(symbol["name"].split('/')[0]) if include_news else ("neutral", "")
     final_dir = tech_dir if tech_dir else "BUY"
-    final_confidence = confidence if confidence else 55
+    final_conf = confidence if confidence else 55
     if news_dir != "neutral" and news_dir == final_dir.lower():
-        final_confidence = min(90, final_confidence + 10)
+        final_conf = min(90, final_conf + 10)
         combined_reason = f"{tech_reason} + {news_reason}"
     else:
         combined_reason = tech_reason
         if news_dir != "neutral":
-            combined_reason += f" (News {news_dir} but technical neutral)"
+            combined_reason += f" (News {news_dir})"
     price = get_live_price(symbol["ticker"])
     d = symbol["decimals"]
     spread = price * 0.0005
@@ -271,8 +297,8 @@ def generate_accurate_signal(symbol=None, include_news=True):
         "symbol": symbol["name"], "ticker": symbol["ticker"], "emoji": symbol["emoji"],
         "direction": final_dir, "entry_low": entry_low, "entry_high": entry_high,
         "tp1": tp1, "tp2": tp2, "sl": sl, "price": price, "decimals": d,
-        "analysis": combined_reason, "confidence": final_confidence,
-        "holding": holding, "holding_text": holding_text, "accuracy": final_confidence
+        "analysis": combined_reason, "confidence": final_conf,
+        "holding": holding, "holding_text": holding_text, "accuracy": final_conf
     }
 
 # ============================================
@@ -281,24 +307,11 @@ def generate_accurate_signal(symbol=None, include_news=True):
 os.makedirs("telegram_bot", exist_ok=True)
 conn = sqlite3.connect('telegram_bot/users.db', check_same_thread=False)
 c = conn.cursor()
-c.execute('''CREATE TABLE IF NOT EXISTS users 
-             (user_id INTEGER PRIMARY KEY, name TEXT, email TEXT, phone TEXT, 
-              register_date TEXT, is_vip INTEGER, last_promo_sent TEXT, 
-              start_date TEXT)''')
-c.execute('''CREATE TABLE IF NOT EXISTS registrations 
-             (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, name TEXT, 
-              email TEXT, phone TEXT, date TEXT)''')
-c.execute('''CREATE TABLE IF NOT EXISTS signal_usage 
-             (user_id INTEGER PRIMARY KEY, count INTEGER DEFAULT 0)''')
-c.execute('''CREATE TABLE IF NOT EXISTS channel_signals 
-             (id INTEGER PRIMARY KEY AUTOINCREMENT, symbol TEXT, direction TEXT,
-              entry REAL, tp1 REAL, tp2 REAL, sl REAL, decimals INTEGER,
-              sent_date TEXT, sent_time TEXT, result TEXT DEFAULT "pending",
-              message_id INTEGER DEFAULT NULL, ticker TEXT,
-              channel_type TEXT DEFAULT "public", accuracy INTEGER DEFAULT 85,
-              timeframe TEXT, reason TEXT, holding TEXT)''')
-c.execute('''CREATE TABLE IF NOT EXISTS bot_settings 
-             (key TEXT PRIMARY KEY, value TEXT)''')
+c.execute('''CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, name TEXT, email TEXT, phone TEXT, register_date TEXT, is_vip INTEGER, last_promo_sent TEXT, start_date TEXT)''')
+c.execute('''CREATE TABLE IF NOT EXISTS registrations (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, name TEXT, email TEXT, phone TEXT, date TEXT)''')
+c.execute('''CREATE TABLE IF NOT EXISTS signal_usage (user_id INTEGER PRIMARY KEY, count INTEGER DEFAULT 0)''')
+c.execute('''CREATE TABLE IF NOT EXISTS channel_signals (id INTEGER PRIMARY KEY AUTOINCREMENT, symbol TEXT, direction TEXT, entry REAL, tp1 REAL, tp2 REAL, sl REAL, decimals INTEGER, sent_date TEXT, sent_time TEXT, result TEXT DEFAULT "pending", message_id INTEGER DEFAULT NULL, ticker TEXT, channel_type TEXT DEFAULT "public", accuracy INTEGER DEFAULT 85, timeframe TEXT, reason TEXT, holding TEXT)''')
+c.execute('''CREATE TABLE IF NOT EXISTS bot_settings (key TEXT PRIMARY KEY, value TEXT)''')
 conn.commit()
 
 def get_setting(key, default=None):
@@ -314,16 +327,13 @@ if not get_setting("vip_channel_id"):
     set_setting("vip_channel_id", VIP_CHANNEL_ID)
 
 FREE_SIGNAL_LIMIT = 3
-
 def get_signal_count(user_id):
     c.execute("SELECT count FROM signal_usage WHERE user_id=?", (user_id,))
     row = c.fetchone()
     return row[0] if row else 0
-
 def increment_signal_count(user_id):
     c.execute("INSERT INTO signal_usage (user_id, count) VALUES (?, 1) ON CONFLICT(user_id) DO UPDATE SET count = count + 1", (user_id,))
     conn.commit()
-
 def signals_remaining(user_id):
     return max(0, FREE_SIGNAL_LIMIT - get_signal_count(user_id))
 
@@ -335,8 +345,7 @@ print(f"✅ Bot connected: {bot.get_me().username}")
 
 def save_signal_to_db(data, channel_type="public"):
     now = datetime.datetime.now()
-    c.execute("""INSERT INTO channel_signals 
-                 (symbol, direction, entry, tp1, tp2, sl, decimals, sent_date, sent_time, ticker, channel_type, accuracy, timeframe, reason, holding)
+    c.execute("""INSERT INTO channel_signals (symbol, direction, entry, tp1, tp2, sl, decimals, sent_date, sent_time, ticker, channel_type, accuracy, timeframe, reason, holding)
                  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
               (data["symbol"], data["direction"], (data["entry_low"]+data["entry_high"])/2,
                data["tp1"], data["tp2"], data["sl"], data["decimals"],
@@ -348,11 +357,9 @@ def save_signal_to_db(data, channel_type="public"):
 def update_signal_message_id(signal_id, msg_id):
     c.execute("UPDATE channel_signals SET message_id=? WHERE id=?", (msg_id, signal_id))
     conn.commit()
-
 def update_signal_result(signal_id, result):
     c.execute("UPDATE channel_signals SET result=? WHERE id=?", (result, signal_id))
     conn.commit()
-
 def get_pending_signals():
     c.execute("SELECT id, symbol, direction, entry, tp1, tp2, sl, decimals, message_id, ticker, result, channel_type, accuracy FROM channel_signals WHERE result='pending' AND message_id IS NOT NULL")
     return c.fetchall()
@@ -362,7 +369,7 @@ def get_ist_time():
     return datetime.datetime.utcnow() + IST_OFFSET
 
 # ============================================
-# SIGNAL TEMPLATES
+# SIGNAL TEMPLATES (Public)
 # ============================================
 def template_with_analysis(d):
     ist = get_ist_time()
@@ -414,10 +421,10 @@ def build_channel_post():
     return random.choice(TEMPLATES)(d), sid
 
 # ============================================
-# 30+ UNIQUE PROMOTIONAL MESSAGES (Indian English, Hype)
+# PROMO MESSAGES (30+ unique)
 # ============================================
 PROMO_MESSAGES = [
-    "💎 *FREE SIGNALS MILTE HAIN* daily! Join our free channel: {FREE_CHANNEL}\n⭐ VIP me early entry + 30-35 signals/day sirf ₹399! {VIP_CHANNEL_LINK}",
+    "💎 *FREE SIGNALS MILTE HAIN* daily! Join free channel: {FREE_CHANNEL}\n⭐ VIP me early entry + 30-35 signals/day sirf ₹399! {VIP_CHANNEL_LINK}",
     "🚀 *Aaj hi 3 logon ne VIP join kiya aur profit book kiya!* Tum kab aa rahe ho? {VIP_CHANNEL_LINK}",
     "📊 *Free channel me signal delay hota hai.* VIP me entry 30 min pehle milti hai. Fark dekho: {VIP_CHANNEL_LINK}",
     "💰 *₹399/month mein kya milega?* 30-35 premium signals, early entry, 1-on-1 support. ROI 3600%+! Join: {VIP_CHANNEL_LINK}",
@@ -452,48 +459,33 @@ PROMO_MESSAGES = [
 ]
 
 def get_promo_for_user():
-    """Return a random promo message with placeholders replaced"""
     msg = random.choice(PROMO_MESSAGES)
     return msg.format(
-        FREE_CHANNEL=FREE_CHANNEL,
-        VIP_CHANNEL_LINK=VIP_CHANNEL_LINK,
-        CONTACT_USERNAME=CONTACT_USERNAME,
-        UPI_ID=UPI_ID,
-        COURSE_URL=COURSE_URL
+        FREE_CHANNEL=FREE_CHANNEL, VIP_CHANNEL_LINK=VIP_CHANNEL_LINK,
+        CONTACT_USERNAME=CONTACT_USERNAME, UPI_ID=UPI_ID, COURSE_URL=COURSE_URL
     )
 
-# ============================================
-# BACKGROUND THREAD: SEND PROMOS TO ALL USERS EVERY 30 MIN
-# ============================================
 def send_promo_to_all_users():
-    """Send a unique promo message to every user who has ever started the bot (every 30 min)"""
     while True:
         try:
-            # Get all users who have started the bot (either registered or just /start)
-            c.execute("SELECT user_id, last_promo_sent FROM users")
+            c.execute("SELECT user_id FROM users")
             users = c.fetchall()
-            now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            for (uid, last_sent) in users:
-                # Avoid sending too frequently (but we already run every 30 min, so fine)
+            for (uid,) in users:
                 try:
-                    promo_text = get_promo_for_user()
-                    bot.send_message(uid, promo_text, parse_mode='Markdown')
-                    # Update last_promo_sent
-                    c.execute("UPDATE users SET last_promo_sent=? WHERE user_id=?", (now_str, uid))
-                    conn.commit()
-                    time.sleep(0.5)  # Respect rate limits
-                except Exception as e:
-                    print(f"Failed to send promo to {uid}: {e}")
+                    bot.send_message(uid, get_promo_for_user(), parse_mode='Markdown')
+                    time.sleep(0.5)
+                except:
+                    pass
             print(f"✅ Promos sent to {len(users)} users at {get_ist_time().strftime('%H:%M')}")
         except Exception as e:
-            print(f"Promo sender error: {e}")
-        time.sleep(1800)  # 30 minutes
+            print(f"Promo error: {e}")
+        time.sleep(1800)
 
 # ============================================
-# PRICE MONITOR (TP/SL)
+# PRICE MONITOR
 # ============================================
 TP_HYPE = [
-    "🎯🔥 *TARGET HIT!* 🔥🎯\n\n{symbol} {direction} → *{tp} ✅ REACHED!*\n\n+{profit} {unit} profit!\n\n💎 *KAILASH TRADING* - India's Most Trusted\n👉 Join VIP for early entries: {vip}",
+    "🎯🔥 *TARGET HIT!* 🔥🎯\n\n{symbol} {direction} → *{tp} ✅ REACHED!*\n\n+{profit} {unit} profit!\n\n💎 *KAILASH TRADING* - India's Most Trusted\n👉 Join VIP: {vip}",
     "💰 *BOOM! TP HIT!* 💰\n\n{symbol} → *{tp} SMASHED!* 🎯\n*{direction} +{profit} {unit}*\n⭐ *Win Rate {accuracy}%* | VIP: {vip}",
 ]
 
@@ -555,7 +547,7 @@ def price_monitor():
             print(f"Monitor error: {e}")
 
 # ============================================
-# VIP CHANNEL SCHEDULER
+# VIP CHANNEL SCHEDULER (FIXED TEMPLATE)
 # ============================================
 def vip_signal_post(d):
     ist = get_ist_time()
@@ -568,10 +560,13 @@ def vip_signal_post(d):
 🎯 *TP1:* `{d['tp1']}`
 🎯 *TP2:* `{d['tp2']}`
 ⛔ *SL:* `{d['sl']}`
+
 📊 *Analysis:* _{d['analysis']}_
-⏰ *Hold:* {d['holding_text']} | Confidence: {d['confidence']}%
+⏰ *Holding Period:* {d['holding_text']}
+📈 *Confidence:* {d['confidence']}%
+
 🕐 {ist.strftime('%H:%M')} IST
-🔒 VIP Only
+🔒 *VIP Only*
 ━━━━━━━━━━━━━━━━━━━━━━━
 🔥 Next signal in 10-15 mins!"""
 
@@ -614,7 +609,7 @@ def vip_channel_scheduler():
         time.sleep(random.randint(600, 900))
 
 # ============================================
-# PUBLIC SCHEDULER (8-10 signals + promos)
+# PUBLIC SCHEDULER
 # ============================================
 public_signal_count = 0
 last_pub_date = ""
@@ -662,7 +657,6 @@ def main_keyboard():
 @bot.message_handler(commands=['start'])
 def start_cmd(msg):
     uid = msg.from_user.id
-    # Add user to database if not exists (so they receive promos)
     c.execute("SELECT user_id FROM users WHERE user_id=?", (uid,))
     if not c.fetchone():
         c.execute("INSERT INTO users (user_id, name, email, phone, register_date, is_vip, last_promo_sent, start_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",

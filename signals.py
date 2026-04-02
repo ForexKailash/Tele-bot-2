@@ -1,7 +1,4 @@
 import random
-import yfinance as yf
-import pandas as pd
-import numpy as np
 from datetime import datetime
 
 class SignalGenerator:
@@ -19,6 +16,7 @@ class SignalGenerator:
 
     def get_live_price(self, symbol):
         try:
+            import yfinance as yf
             ticker = yf.Ticker(symbol)
             data = ticker.history(period="1d", interval="1m")
             if not data.empty:
@@ -29,6 +27,7 @@ class SignalGenerator:
 
     def get_historical_data(self, symbol, period="1d", interval="5m"):
         try:
+            import yfinance as yf
             ticker = yf.Ticker(symbol)
             return ticker.history(period=period, interval=interval)
         except:
@@ -37,6 +36,7 @@ class SignalGenerator:
     def calculate_rsi(self, data, period=14):
         if data is None or len(data) < period:
             return 50
+        import pandas as pd
         delta = data.diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
@@ -115,7 +115,6 @@ class SignalGenerator:
         if action is None or confidence < 60:
             return None
 
-        # Entry, TP, SL
         if "BUY" in action:
             entry = live_price
             tp1 = entry + entry * 0.005
@@ -159,7 +158,6 @@ class SignalGenerator:
         self.public_signals_today += 1
 
     def get_best_signal(self, signal_type="public"):
-        # Complete list of trading pairs (12 symbols)
         pairs = {
             "XAUUSD=X": "🟡 GOLD",
             "EURUSD=X": "💶 EUR/USD",
@@ -185,6 +183,7 @@ class SignalGenerator:
     def format_vip_signal(self, signal):
         reasons = "\n".join(signal['reasons'])
         rr = round(abs(signal['tp1'] - signal['entry']) / abs(signal['sl'] - signal['entry']), 1)
+        # Using double braces to escape literal braces in f-string
         msg = f"""
 👑 *VIP EXCLUSIVE SIGNAL* 👑
 

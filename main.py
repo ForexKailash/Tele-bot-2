@@ -11,13 +11,14 @@ import pandas_ta as ta
 import numpy as np
 import requests
 import json
+from flask import Flask, request
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # ============================================
 # CONFIGURATION
 # ============================================
 BOT_TOKEN = "8653450456:AAER9w6Gjj5IWkyCs1taa01N-DdMFZqxt3E"
-ADMIN_ID = 6253584826  # Your admin ID (keep as is)
+ADMIN_ID = 6253584826
 CHANNEL_ID = '@tradewithkailashh'
 FREE_CHANNEL = 'https://t.me/tradewithkailashh'
 VIP_CHANNEL_LINK = 'https://t.me/+Snj0BVAwjDo3NTA1'
@@ -25,12 +26,16 @@ VIP_CHANNEL_ID = "-1003826269063"
 WEBSITE_URL = 'https://forexkailash.netlify.app'
 COURSE_URL = 'https://forexkailash.netlify.app/course'
 UPI_ID = 'kailashbhardwaj66-2@okicici'
-CONTACT_USERNAME = '@forexkailash'  # Updated
+CONTACT_USERNAME = '@forexkailash'
+
+# Webhook URL from Railway environment
+WEBHOOK_URL = os.environ.get('WEBHOOK_URL', '')
 
 print("=" * 60)
-print("🤖 KAILASH FOREX SIGNAL BOT - ULTIMATE EDITION")
+print("🤖 KAILASH FOREX SIGNAL BOT - WEBHOOK EDITION")
 print(f"Admin: {CONTACT_USERNAME}")
 print(f"VIP Channel ID: {VIP_CHANNEL_ID}")
+print(f"Webhook URL: {WEBHOOK_URL or 'Not set, using polling'}")
 print("=" * 60)
 
 # ============================================
@@ -38,9 +43,13 @@ print("=" * 60)
 # ============================================
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"OK")
+        if self.path == '/health':
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"OK")
+        else:
+            self.send_response(404)
+            self.end_headers()
     def log_message(self, format, *args):
         pass
 
@@ -52,7 +61,7 @@ def run_health_server():
 threading.Thread(target=run_health_server, daemon=True).start()
 
 # ============================================
-# RELIABLE SYMBOLS (all working on Yahoo Finance)
+# RELIABLE SYMBOLS
 # ============================================
 SYMBOLS = [
     {"name": "XAU/USD", "ticker": "GC=F", "emoji": "🥇", "decimals": 2, "tp1_pct": 0.004, "tp2_pct": 0.008, "sl_pct": 0.003, "type": "commodity"},
@@ -70,7 +79,6 @@ SYMBOLS = [
     {"name": "USD/CAD", "ticker": "USDCAD=X", "emoji": "🍁", "decimals": 5, "tp1_pct": 0.003, "tp2_pct": 0.006, "sl_pct": 0.002, "type": "forex"},
 ]
 
-# Fallback prices for when API fails
 FALLBACK_PRICES = {
     "GC=F": 4520.00, "BTC-USD": 68500.00, "EURUSD=X": 1.08750, "CL=F": 79.50,
     "GBPUSD=X": 1.26800, "JPY=X": 150.50, "ETH-USD": 3550.00, "NQ=F": 18700.00,
@@ -79,19 +87,16 @@ FALLBACK_PRICES = {
 }
 
 # ============================================
-# NEWS SENTIMENT ANALYSIS (using GNews API - free)
+# NEWS SENTIMENT (free GNews API)
 # ============================================
 def get_news_sentiment(asset_name):
-    """Fetch news sentiment for the asset (simple keyword-based)"""
     try:
-        # Use free GNews API (no key needed for basic, but limited)
         url = f"https://gnews.io/api/v4/search?q={asset_name}&lang=en&max=5"
         response = requests.get(url, timeout=5)
         if response.status_code == 200:
             data = response.json()
             articles = data.get('articles', [])
             if articles:
-                # Simple sentiment: count positive/negative words
                 positive_words = ['surge', 'rally', 'gain', 'bullish', 'up', 'higher', 'breakout', 'strong']
                 negative_words = ['drop', 'fall', 'bearish', 'down', 'lower', 'crash', 'weak', 'decline']
                 score = 0
@@ -109,38 +114,32 @@ def get_news_sentiment(asset_name):
                     return "bearish", f"Negative news sentiment ({score})"
                 else:
                     return "neutral", "Mixed/neutral news"
-    except Exception as e:
-        print(f"News error: {e}")
+    except:
+        pass
     return "neutral", "No clear news bias"
 
 # ============================================
-# TECHNICAL ANALYSIS ENGINE (Multi-timeframe)
+# TECHNICAL ANALYSIS (Multi-timeframe)
 # ============================================
 def fetch_safe_data(ticker, period, interval):
-    """Safely fetch data with retries and fallback"""
     for attempt in range(3):
         try:
             data = yf.download(ticker, period=period, interval=interval, progress=False, timeout=10)
             if not data.empty:
                 return data
-        except Exception as e:
-            print(f"Fetch error {ticker} {interval}: {e}")
+        except:
+            pass
         time.sleep(1)
     return pd.DataFrame()
 
 def get_technical_analysis(ticker, asset_name):
-    """Analyze multiple timeframes and return signal with confidence and holding period"""
     try:
-        # Fetch data for different timeframes
         daily = fetch_safe_data(ticker, "60d", "1d")
         four_hour = fetch_safe_data(ticker, "30d", "60m")
-        one_hour = fetch_safe_data(ticker, "7d", "30m")
-        fifteen_min = fetch_safe_data(ticker, "2d", "15m")
         
         if daily.empty:
-            return None, 0, "No data", "neutral", "short"
+            return None, 0, "No data", "short", "Short-term (1-2 days)"
         
-        # Daily indicators
         daily['rsi'] = ta.rsi(daily['Close'], length=14)
         daily['ema9'] = ta.ema(daily['Close'], length=9)
         daily['ema21'] = ta.ema(daily['Close'], length=21)
@@ -152,17 +151,14 @@ def get_technical_analysis(ticker, asset_name):
             daily['macd'] = 0
             daily['signal'] = 0
         
-        # Support/Resistance
         recent_high = daily['High'].tail(20).max()
         recent_low = daily['Low'].tail(20).min()
         current_price = daily['Close'].iloc[-1]
         
-        # Trend detection on higher timeframes
         daily_trend = "bullish" if daily['ema9'].iloc[-1] > daily['ema21'].iloc[-1] else "bearish"
         daily_rsi = daily['rsi'].iloc[-1] if not pd.isna(daily['rsi'].iloc[-1]) else 50
         daily_macd_bull = daily['macd'].iloc[-1] > daily['signal'].iloc[-1]
         
-        # 4H trend
         four_hour_trend = "neutral"
         if not four_hour.empty and len(four_hour) > 20:
             four_hour['ema9'] = ta.ema(four_hour['Close'], length=9)
@@ -170,17 +166,14 @@ def get_technical_analysis(ticker, asset_name):
             if not pd.isna(four_hour['ema9'].iloc[-1]) and not pd.isna(four_hour['ema21'].iloc[-1]):
                 four_hour_trend = "bullish" if four_hour['ema9'].iloc[-1] > four_hour['ema21'].iloc[-1] else "bearish"
         
-        # Score system
         bullish_score = 0
         bearish_score = 0
         
-        # Daily trend (strong weight)
         if daily_trend == "bullish":
             bullish_score += 3
         else:
             bearish_score += 3
         
-        # RSI
         if daily_rsi < 30:
             bullish_score += 2
             rsi_signal = "oversold"
@@ -190,19 +183,16 @@ def get_technical_analysis(ticker, asset_name):
         else:
             rsi_signal = "neutral"
         
-        # MACD
         if daily_macd_bull:
             bullish_score += 2
         else:
             bearish_score += 2
         
-        # 4H alignment
         if four_hour_trend == "bullish":
             bullish_score += 2
         elif four_hour_trend == "bearish":
             bearish_score += 2
         
-        # Support/Resistance proximity
         if current_price <= recent_low * 1.005:
             bullish_score += 2
             sr_signal = "near support"
@@ -212,16 +202,14 @@ def get_technical_analysis(ticker, asset_name):
         else:
             sr_signal = "neutral"
         
-        # Determine final signal
         if bullish_score > bearish_score + 2:
             direction = "BUY"
             confidence = min(85, 60 + (bullish_score - bearish_score) * 3)
-            # Determine holding period: long-term if daily trend strong and RSI not overbought
             if daily_trend == "bullish" and daily_rsi < 60:
-                holding = "long"  # Long-term (days to weeks)
+                holding = "long"
                 holding_text = "Long-term hold (3-7 days)"
             else:
-                holding = "short"  # Short-term (hours to 1-2 days)
+                holding = "short"
                 holding_text = "Short-term (1-2 days)"
         elif bearish_score > bullish_score + 2:
             direction = "SELL"
@@ -233,108 +221,16 @@ def get_technical_analysis(ticker, asset_name):
                 holding = "short"
                 holding_text = "Short-term (1-2 days)"
         else:
-            # Neutral - follow daily trend
-            if daily_trend == "bullish":
-                direction = "BUY"
-                confidence = 55
-                holding = "short"
-                holding_text = "Short-term (1-2 days)"
-            else:
-                direction = "SELL"
-                confidence = 55
-                holding = "short"
-                holding_text = "Short-term (1-2 days)"
+            direction = "BUY" if daily_trend == "bullish" else "SELL"
+            confidence = 55
+            holding = "short"
+            holding_text = "Short-term (1-2 days)"
         
-        # Generate reason
         reason = f"Daily: {daily_trend.upper()}, RSI {daily_rsi:.0f} ({rsi_signal}), MACD {'bullish' if daily_macd_bull else 'bearish'}. 4H: {four_hour_trend.upper()}. Price {sr_signal}."
-        
         return direction, confidence, reason, holding, holding_text
-        
     except Exception as e:
-        print(f"Analysis error {ticker}: {e}")
-        return None, 0, None, "short", "Short-term"
-
-# ============================================
-# SIGNAL GENERATION (Technical + News)
-# ============================================
-def generate_accurate_signal(symbol=None, include_news=True):
-    if symbol is None:
-        symbol = random.choice(SYMBOLS)
-    
-    # Technical analysis
-    tech_dir, confidence, tech_reason, holding, holding_text = get_technical_analysis(symbol["ticker"], symbol["name"])
-    
-    # News sentiment
-    news_dir = "neutral"
-    news_reason = ""
-    if include_news:
-        news_dir, news_reason = get_news_sentiment(symbol["name"].split('/')[0])
-    
-    # Combine signals: if both technical and news agree, boost confidence
-    final_dir = tech_dir if tech_dir else "BUY"
-    final_confidence = confidence if confidence else 55
-    
-    if news_dir != "neutral" and news_dir == final_dir.lower():
-        final_confidence = min(90, final_confidence + 10)
-        combined_reason = f"{tech_reason} + {news_reason}"
-    else:
-        combined_reason = tech_reason
-        if news_dir != "neutral":
-            combined_reason += f" (News {news_dir} but technical neutral)"
-    
-    # Get live price
-    price = get_live_price(symbol["ticker"])
-    d = symbol["decimals"]
-    spread = price * 0.0005
-    
-    if final_dir == "BUY":
-        entry_low = round(price - spread, d)
-        entry_high = round(price + spread, d)
-        # Adjust TP/SL based on holding period
-        if holding == "long":
-            tp1_pct = symbol["tp1_pct"] * 1.5
-            tp2_pct = symbol["tp2_pct"] * 2.0
-            sl_pct = symbol["sl_pct"] * 1.2
-        else:
-            tp1_pct = symbol["tp1_pct"] * 0.8
-            tp2_pct = symbol["tp2_pct"] * 0.9
-            sl_pct = symbol["sl_pct"] * 0.9
-        tp1 = round(price * (1 + tp1_pct), d)
-        tp2 = round(price * (1 + tp2_pct), d)
-        sl = round(price * (1 - sl_pct), d)
-    else:
-        entry_low = round(price - spread, d)
-        entry_high = round(price + spread, d)
-        if holding == "long":
-            tp1_pct = symbol["tp1_pct"] * 1.5
-            tp2_pct = symbol["tp2_pct"] * 2.0
-            sl_pct = symbol["sl_pct"] * 1.2
-        else:
-            tp1_pct = symbol["tp1_pct"] * 0.8
-            tp2_pct = symbol["tp2_pct"] * 0.9
-            sl_pct = symbol["sl_pct"] * 0.9
-        tp1 = round(price * (1 - tp1_pct), d)
-        tp2 = round(price * (1 - tp2_pct), d)
-        sl = round(price * (1 + sl_pct), d)
-    
-    return {
-        "symbol": symbol["name"],
-        "ticker": symbol["ticker"],
-        "emoji": symbol["emoji"],
-        "direction": final_dir,
-        "entry_low": entry_low,
-        "entry_high": entry_high,
-        "tp1": tp1,
-        "tp2": tp2,
-        "sl": sl,
-        "price": price,
-        "decimals": d,
-        "analysis": combined_reason,
-        "confidence": final_confidence,
-        "holding": holding,
-        "holding_text": holding_text,
-        "accuracy": final_confidence
-    }
+        print(f"Analysis error: {e}")
+        return None, 0, None, "short", "Short-term (1-2 days)"
 
 def get_live_price(ticker):
     for attempt in range(3):
@@ -346,6 +242,59 @@ def get_live_price(ticker):
             pass
         time.sleep(1)
     return FALLBACK_PRICES.get(ticker, 1000.00)
+
+def generate_accurate_signal(symbol=None, include_news=True):
+    if symbol is None:
+        symbol = random.choice(SYMBOLS)
+    
+    tech_dir, confidence, tech_reason, holding, holding_text = get_technical_analysis(symbol["ticker"], symbol["name"])
+    news_dir, news_reason = get_news_sentiment(symbol["name"].split('/')[0]) if include_news else ("neutral", "")
+    
+    final_dir = tech_dir if tech_dir else "BUY"
+    final_confidence = confidence if confidence else 55
+    
+    if news_dir != "neutral" and news_dir == final_dir.lower():
+        final_confidence = min(90, final_confidence + 10)
+        combined_reason = f"{tech_reason} + {news_reason}"
+    else:
+        combined_reason = tech_reason
+        if news_dir != "neutral":
+            combined_reason += f" (News {news_dir} but technical neutral)"
+    
+    price = get_live_price(symbol["ticker"])
+    d = symbol["decimals"]
+    spread = price * 0.0005
+    
+    if final_dir == "BUY":
+        entry_low = round(price - spread, d)
+        entry_high = round(price + spread, d)
+        if holding == "long":
+            tp1 = round(price * (1 + symbol["tp1_pct"] * 1.5), d)
+            tp2 = round(price * (1 + symbol["tp2_pct"] * 2.0), d)
+            sl = round(price * (1 - symbol["sl_pct"] * 1.2), d)
+        else:
+            tp1 = round(price * (1 + symbol["tp1_pct"] * 0.8), d)
+            tp2 = round(price * (1 + symbol["tp2_pct"] * 0.9), d)
+            sl = round(price * (1 - symbol["sl_pct"] * 0.9), d)
+    else:
+        entry_low = round(price - spread, d)
+        entry_high = round(price + spread, d)
+        if holding == "long":
+            tp1 = round(price * (1 - symbol["tp1_pct"] * 1.5), d)
+            tp2 = round(price * (1 - symbol["tp2_pct"] * 2.0), d)
+            sl = round(price * (1 + symbol["sl_pct"] * 1.2), d)
+        else:
+            tp1 = round(price * (1 - symbol["tp1_pct"] * 0.8), d)
+            tp2 = round(price * (1 - symbol["tp2_pct"] * 0.9), d)
+            sl = round(price * (1 + symbol["sl_pct"] * 0.9), d)
+    
+    return {
+        "symbol": symbol["name"], "ticker": symbol["ticker"], "emoji": symbol["emoji"],
+        "direction": final_dir, "entry_low": entry_low, "entry_high": entry_high,
+        "tp1": tp1, "tp2": tp2, "sl": sl, "price": price, "decimals": d,
+        "analysis": combined_reason, "confidence": final_confidence,
+        "holding": holding, "holding_text": holding_text, "accuracy": final_confidence
+    }
 
 # ============================================
 # DATABASE SETUP
@@ -392,9 +341,6 @@ def signals_remaining(user_id):
 bot = telebot.TeleBot(BOT_TOKEN)
 print(f"✅ Bot connected: {bot.get_me().username}")
 
-# ============================================
-# SAVE SIGNAL TO DB
-# ============================================
 def save_signal_to_db(data, channel_type="public"):
     now = datetime.datetime.now()
     c.execute("""INSERT INTO channel_signals (symbol, direction, entry, tp1, tp2, sl, decimals, sent_date, sent_time, ticker, channel_type, accuracy, timeframe, reason, holding)
@@ -423,7 +369,7 @@ def get_ist_time():
     return datetime.datetime.utcnow() + IST_OFFSET
 
 # ============================================
-# SIGNAL TEMPLATES (with holding period)
+# SIGNAL TEMPLATES
 # ============================================
 def template_with_analysis(d):
     ist = get_ist_time()
@@ -475,7 +421,7 @@ def build_channel_post():
     return random.choice(TEMPLATES)(d), sid
 
 # ============================================
-# PROMOTIONAL MESSAGES (for public channel)
+# PROMOTIONAL MESSAGES
 # ============================================
 PROMO_MESSAGES = [
     f"💬 *WHAT OUR MEMBERS SAY* - Join VIP for ₹399/month! {VIP_CHANNEL_LINK}",
@@ -494,26 +440,24 @@ def get_promo():
     return random.choice(PROMO_MESSAGES)
 
 # ============================================
-# USER TARGETED PROMOS (every 30 min to each user)
+# USER TARGETED PROMOS (every 30 min)
 # ============================================
 def send_promo_to_all_users():
-    """Send promotional message to every registered user every 30 min"""
     while True:
         try:
-            # Get all users who registered in last 7 days (active)
             c.execute("SELECT user_id FROM users WHERE register_date > datetime('now', '-7 days')")
             users = c.fetchall()
             for (uid,) in users:
                 try:
                     promo_text = f"📢 *Join our FREE channel* for daily signals: {FREE_CHANNEL}\n\n⭐ *Upgrade to VIP* for early entries and 30-35 premium signals: {VIP_CHANNEL_LINK}\n\n📩 DM {CONTACT_USERNAME} for details!"
                     bot.send_message(uid, promo_text, parse_mode='Markdown')
-                    time.sleep(0.5)  # Avoid flood wait
-                except Exception as e:
-                    print(f"Failed to send promo to {uid}: {e}")
+                    time.sleep(0.5)
+                except:
+                    pass
             print(f"Sent promos to {len(users)} users at {get_ist_time().strftime('%H:%M')}")
         except Exception as e:
             print(f"User promo error: {e}")
-        time.sleep(1800)  # 30 minutes
+        time.sleep(1800)
 
 # ============================================
 # PRICE MONITOR (TP/SL)
@@ -581,7 +525,7 @@ def price_monitor():
             print(f"Monitor error: {e}")
 
 # ============================================
-# VIP CHANNEL SIGNALS
+# VIP CHANNEL SCHEDULER
 # ============================================
 def vip_signal_post(d):
     ist = get_ist_time()
@@ -632,16 +576,15 @@ def vip_channel_scheduler():
                 vip_signal_count += 1
                 print(f"VIP signal #{vip_signal_count}: {d['symbol']} {d['direction']} (conf {d['confidence']}%)")
             else:
-                # Send course promo every 30 min instead of signals
                 promo_counter += 1
-                if promo_counter % 2 == 0:  # every 30 min (since scheduler runs every 15 min, so every 2nd call)
+                if promo_counter % 2 == 0:
                     bot.send_message(VIP_CHANNEL_ID, random.choice(VIP_COURSE_PROMOS), parse_mode='Markdown')
         except Exception as e:
             print(f"VIP scheduler error: {e}")
-        time.sleep(random.randint(600, 900))  # 10-15 min
+        time.sleep(random.randint(600, 900))
 
 # ============================================
-# PUBLIC SCHEDULER (8-10 signals + promos)
+# PUBLIC SCHEDULER
 # ============================================
 public_signal_count = 0
 last_pub_date = ""
@@ -792,26 +735,58 @@ def callback(call):
     bot.answer_callback_query(call.id)
 
 # ============================================
-# MAIN WITH RETRY LOGIC
+# WEBHOOK OR POLLING
 # ============================================
-def start_bot_with_retry():
-    while True:
+def set_webhook():
+    if WEBHOOK_URL:
+        webhook_path = f"{WEBHOOK_URL}/webhook"
         try:
-            print("🚀 Connecting to Telegram API...")
-            try:
-                bot.remove_webhook()
-            except:
-                pass
-            bot.infinity_polling(timeout=60, long_polling_timeout=60, skip_pending=True)
+            bot.remove_webhook()
+            time.sleep(1)
+            bot.set_webhook(url=webhook_path)
+            print(f"✅ Webhook set to {webhook_path}")
+            return True
         except Exception as e:
-            print(f"❌ Polling error: {e}")
-            time.sleep(15)
+            print(f"❌ Failed to set webhook: {e}")
+    return False
 
+# Flask app for webhook
+flask_app = Flask(__name__)
+
+@flask_app.route('/webhook', methods=['POST'])
+def webhook():
+    if request.headers.get('content-type') == 'application/json':
+        json_string = request.get_data().decode('utf-8')
+        update = telebot.types.Update.de_json(json_string)
+        bot.process_new_updates([update])
+        return 'OK', 200
+    return 'Bad Request', 400
+
+@flask_app.route('/')
+def index():
+    return "Bot is running", 200
+
+# ============================================
+# MAIN
+# ============================================
 if __name__ == "__main__":
-    print("Starting all threads...")
+    print("Starting threads...")
     threading.Thread(target=public_scheduler, daemon=True).start()
     threading.Thread(target=price_monitor, daemon=True).start()
     threading.Thread(target=vip_channel_scheduler, daemon=True).start()
     threading.Thread(target=send_promo_to_all_users, daemon=True).start()
-    print("All threads started. Bot is ready.")
-    start_bot_with_retry()
+    
+    if set_webhook():
+        port = int(os.environ.get('PORT', 8080))
+        print(f"🚀 Starting Flask webhook server on port {port}")
+        flask_app.run(host='0.0.0.0', port=port)
+    else:
+        print("⚠️ Webhook failed, falling back to polling")
+        # Fallback to polling with retry
+        while True:
+            try:
+                bot.remove_webhook()
+                bot.infinity_polling(timeout=60, long_polling_timeout=60)
+            except Exception as e:
+                print(f"Polling error: {e}")
+                time.sleep(15)

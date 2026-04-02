@@ -7,6 +7,7 @@ import time
 import json
 import logging
 import random
+import hashlib
 
 from signals import SignalGenerator
 from market_data import MarketData
@@ -21,8 +22,8 @@ VIP_LINK = "https://t.me/+Snj0BVAwjDo3NTA1"
 FREE_CHANNEL_LINK = "https://t.me/tradewithkailashh"
 
 # Channel IDs (negative numbers as required by Telegram)
-PUBLIC_CHANNEL = -1003807818260    # public channel ID
-VIP_CHANNEL = -1003826269063       # VIP channel ID
+PUBLIC_CHANNEL = -1003807818260
+VIP_CHANNEL = -1003826269063
 # =======================================
 
 # === INITIALISE ===
@@ -36,7 +37,8 @@ free_signal_count = {}
 vip_users = {}
 active_trades = {}
 
-for fname, var in [('user_data.json', user_data), ('free_count.json', free_signal_count), ('vip_users.json', vip_users), ('active_trades.json', active_trades)]:
+for fname, var in [('user_data.json', user_data), ('free_count.json', free_signal_count),
+                   ('vip_users.json', vip_users), ('active_trades.json', active_trades)]:
     try:
         with open(fname, 'r') as f:
             var.update(json.load(f))
@@ -101,7 +103,11 @@ def payment_menu():
 def send_welcome(message):
     uid = str(message.from_user.id)
     if uid not in user_data:
-        user_data[uid] = {"name": message.from_user.first_name, "username": message.from_user.username, "joined": datetime.now().isoformat()}
+        user_data[uid] = {
+            "name": message.from_user.first_name,
+            "username": message.from_user.username,
+            "joined": datetime.now().isoformat()
+        }
         save_data()
     if uid not in free_signal_count:
         free_signal_count[uid] = 0
@@ -130,8 +136,10 @@ India's Most Trusted Forex Signals Provider | 5000+ Happy Traders
 def free_channel_cb(call):
     txt = f"📢 *Join our Free Channel for regular signals!*\n\n🔗 {FREE_CHANNEL_LINK}"
     kb = InlineKeyboardMarkup()
-    kb.add(InlineKeyboardButton("🔗 Join Free Channel", url=FREE_CHANNEL_LINK), InlineKeyboardButton("🔙 Back", callback_data="back_menu"))
-    bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=kb)
+    kb.add(InlineKeyboardButton("🔗 Join Free Channel", url=FREE_CHANNEL_LINK),
+           InlineKeyboardButton("🔙 Back", callback_data="back_menu"))
+    bot.edit_message_text(txt, call.message.chat.id, call.message.message_id,
+                         parse_mode='Markdown', reply_markup=kb)
     bot.answer_callback_query(call.id)
 
 @bot.callback_query_handler(func=lambda call: call.data == "free_signal")
@@ -140,23 +148,31 @@ def free_signal_cb(call):
     if free_signal_count.get(uid, 0) >= 3:
         txt = "⚠️ *Free Signal Limit Reached*\n\nJoin VIP for unlimited signals!\n💰 ₹399/month"
         kb = InlineKeyboardMarkup()
-        kb.add(InlineKeyboardButton("👑 Join VIP", url=VIP_LINK), InlineKeyboardButton("🔙 Back", callback_data="back_menu"))
-        bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=kb)
+        kb.add(InlineKeyboardButton("👑 Join VIP", url=VIP_LINK),
+               InlineKeyboardButton("🔙 Back", callback_data="back_menu"))
+        bot.edit_message_text(txt, call.message.chat.id, call.message.message_id,
+                             parse_mode='Markdown', reply_markup=kb)
         return
 
-    bot.edit_message_text("🔍 *Analyzing live market data...*", call.message.chat.id, call.message.message_id, parse_mode='Markdown')
+    bot.edit_message_text("🔍 *Analyzing live market data...*",
+                         call.message.chat.id, call.message.message_id, parse_mode='Markdown')
     sig = signal_gen.get_best_signal(signal_type="public")
     if not sig:
         txt = "❌ No signal available right now. Try again later."
         kb = InlineKeyboardMarkup()
-        kb.add(InlineKeyboardButton("🔄 Try Again", callback_data="free_signal"), InlineKeyboardButton("🔙 Back", callback_data="back_menu"))
-        bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=kb)
+        kb.add(InlineKeyboardButton("🔄 Try Again", callback_data="free_signal"),
+               InlineKeyboardButton("🔙 Back", callback_data="back_menu"))
+        bot.edit_message_text(txt, call.message.chat.id, call.message.message_id,
+                             parse_mode='Markdown', reply_markup=kb)
         return
 
     msg = signal_gen.format_public_signal(sig)
     kb = InlineKeyboardMarkup()
-    kb.add(InlineKeyboardButton("🔄 New Signal", callback_data="free_signal"), InlineKeyboardButton("👑 Get VIP", callback_data="vip_channel"), InlineKeyboardButton("🔙 Back", callback_data="back_menu"))
-    bot.edit_message_text(msg, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=kb)
+    kb.add(InlineKeyboardButton("🔄 New Signal", callback_data="free_signal"),
+           InlineKeyboardButton("👑 Get VIP", callback_data="vip_channel"),
+           InlineKeyboardButton("🔙 Back", callback_data="back_menu"))
+    bot.edit_message_text(msg, call.message.chat.id, call.message.message_id,
+                         parse_mode='Markdown', reply_markup=kb)
 
     free_signal_count[uid] = free_signal_count.get(uid, 0) + 1
     save_data()
@@ -178,7 +194,8 @@ def vip_cb(call):
 
 👇 Join now
 """
-    bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=vip_menu())
+    bot.edit_message_text(txt, call.message.chat.id, call.message.message_id,
+                         parse_mode='Markdown', reply_markup=vip_menu())
     bot.answer_callback_query(call.id)
 
 @bot.callback_query_handler(func=lambda call: call.data == "courses")
@@ -193,16 +210,21 @@ def courses_cb(call):
 
 💳 UPI: kailashbhardwaj66-2@okicici
 """
-    bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=courses_menu())
+    bot.edit_message_text(txt, call.message.chat.id, call.message.message_id,
+                         parse_mode='Markdown', reply_markup=courses_menu())
     bot.answer_callback_query(call.id)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("course_"))
 def course_detail(call):
     courses = {
-        "course_forex": {"name": "Forex Mastery", "price": "₹2999", "desc": "Complete forex foundation, technical analysis, risk management, 10+ hours."},
-        "course_smc": {"name": "Smart Money Concepts", "price": "₹3999", "desc": "Institutional trading, order blocks, liquidity, advanced strategies."},
-        "course_pa": {"name": "Price Action Pro", "price": "₹3499", "desc": "Candlestick patterns, supply/demand, entry/exit mastery."},
-        "course_bundle": {"name": "VIP + All Courses Bundle", "price": "₹9999", "desc": "Lifetime VIP signals + all 3 courses + personal mentorship."}
+        "course_forex": {"name": "Forex Mastery", "price": "₹2999",
+                         "desc": "Complete forex foundation, technical analysis, risk management, 10+ hours."},
+        "course_smc": {"name": "Smart Money Concepts", "price": "₹3999",
+                       "desc": "Institutional trading, order blocks, liquidity, advanced strategies."},
+        "course_pa": {"name": "Price Action Pro", "price": "₹3499",
+                      "desc": "Candlestick patterns, supply/demand, entry/exit mastery."},
+        "course_bundle": {"name": "VIP + All Courses Bundle", "price": "₹9999",
+                          "desc": "Lifetime VIP signals + all 3 courses + personal mentorship."}
     }
     c = courses.get(call.data)
     if c:
@@ -219,8 +241,10 @@ def course_detail(call):
 3️⃣ Get instant access
 """
         kb = InlineKeyboardMarkup()
-        kb.add(InlineKeyboardButton("💳 Pay Now", callback_data="payment_info"), InlineKeyboardButton("🔙 Back", callback_data="courses"))
-        bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=kb)
+        kb.add(InlineKeyboardButton("💳 Pay Now", callback_data="payment_info"),
+               InlineKeyboardButton("🔙 Back", callback_data="courses"))
+        bot.edit_message_text(txt, call.message.chat.id, call.message.message_id,
+                             parse_mode='Markdown', reply_markup=kb)
     bot.answer_callback_query(call.id)
 
 @bot.callback_query_handler(func=lambda call: call.data == "payment_info")
@@ -242,14 +266,16 @@ def payment_info_cb(call):
 
 ⏰ Verification: 2‑4 hours
 """
-    bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=payment_menu())
+    bot.edit_message_text(txt, call.message.chat.id, call.message.message_id,
+                         parse_mode='Markdown', reply_markup=payment_menu())
     bot.answer_callback_query(call.id)
 
 @bot.callback_query_handler(func=lambda call: call.data == "verify_payment")
 def verify_cb(call):
     txt = "✅ Send screenshot to @ForexKailash with your username and plan."
     kb = InlineKeyboardMarkup()
-    kb.add(InlineKeyboardButton("📱 Send", url="https://t.me/ForexKailash"), InlineKeyboardButton("🔙 Back", callback_data="vip_channel"))
+    kb.add(InlineKeyboardButton("📱 Send", url="https://t.me/ForexKailash"),
+           InlineKeyboardButton("🔙 Back", callback_data="vip_channel"))
     bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, reply_markup=kb)
     bot.send_message(ADMIN_ID, f"🔔 Payment request from {call.from_user.first_name} (ID: {call.from_user.id})")
     bot.answer_callback_query(call.id)
@@ -257,7 +283,7 @@ def verify_cb(call):
 @bot.callback_query_handler(func=lambda call: call.data == "live_rates")
 def live_rates_cb(call):
     from market_data import MarketData
-    md = MarketData()
+    md_local = MarketData()
     pairs = {
         "XAUUSD=X": "🟡 Gold",
         "EURUSD=X": "💶 EUR/USD",
@@ -273,20 +299,24 @@ def live_rates_cb(call):
     }
     txt = "📈 *Live Market Rates*\n\n"
     for sym, name in pairs.items():
-        p = md.get_live_price(sym)
+        p = md_local.get_live_price(sym)
         txt += f"{name}: ${p:.2f}\n" if p else f"{name}: 🔴 Offline\n"
     txt += f"\n⏰ Updated: {datetime.now().strftime('%H:%M:%S')} IST"
     kb = InlineKeyboardMarkup()
-    kb.add(InlineKeyboardButton("🔄 Refresh", callback_data="live_rates"), InlineKeyboardButton("🔙 Back", callback_data="back_menu"))
-    bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=kb)
+    kb.add(InlineKeyboardButton("🔄 Refresh", callback_data="live_rates"),
+           InlineKeyboardButton("🔙 Back", callback_data="back_menu"))
+    bot.edit_message_text(txt, call.message.chat.id, call.message.message_id,
+                         parse_mode='Markdown', reply_markup=kb)
     bot.answer_callback_query(call.id)
 
 @bot.callback_query_handler(func=lambda call: call.data == "website")
 def website_cb(call):
     txt = "🌐 *Official Website*\n\nhttps://forexkailash.netlify.app"
     kb = InlineKeyboardMarkup()
-    kb.add(InlineKeyboardButton("🌐 Visit", url=WEBSITE_URL), InlineKeyboardButton("🔙 Back", callback_data="back_menu"))
-    bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=kb)
+    kb.add(InlineKeyboardButton("🌐 Visit", url=WEBSITE_URL),
+           InlineKeyboardButton("🔙 Back", callback_data="back_menu"))
+    bot.edit_message_text(txt, call.message.chat.id, call.message.message_id,
+                         parse_mode='Markdown', reply_markup=kb)
     bot.answer_callback_query(call.id)
 
 @bot.callback_query_handler(func=lambda call: call.data == "support")
@@ -304,18 +334,20 @@ def support_cb(call):
 We're here to help! 🤝
 """
     kb = InlineKeyboardMarkup()
-    kb.add(InlineKeyboardButton("📱 Contact", url="https://t.me/ForexKailash"), InlineKeyboardButton("🔙 Back", callback_data="back_menu"))
-    bot.edit_message_text(txt, call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=kb)
+    kb.add(InlineKeyboardButton("📱 Contact", url="https://t.me/ForexKailash"),
+           InlineKeyboardButton("🔙 Back", callback_data="back_menu"))
+    bot.edit_message_text(txt, call.message.chat.id, call.message.message_id,
+                         parse_mode='Markdown', reply_markup=kb)
     bot.answer_callback_query(call.id)
 
 @bot.callback_query_handler(func=lambda call: call.data == "back_menu")
 def back_cb(call):
-    bot.edit_message_text("🏠 *Main Menu*", call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=main_menu())
+    bot.edit_message_text("🏠 *Main Menu*", call.message.chat.id, call.message.message_id,
+                         parse_mode='Markdown', reply_markup=main_menu())
     bot.answer_callback_query(call.id)
 
 # === REAL-TIME MONITORING LOOP ===
 def monitor_trades():
-    """Continuously check active trades for TP/SL and send updates"""
     while True:
         try:
             for trade_id, trade in list(active_trades.items()):
@@ -324,7 +356,7 @@ def monitor_trades():
                 if current_price is None:
                     continue
 
-                # Check SL hit
+                # SL hit – delete from public channel
                 if (trade['action'] == "BUY ✅" and current_price <= trade['sl']) or \
                    (trade['action'] == "SELL 🔻" and current_price >= trade['sl']):
                     if trade['channel_type'] == 'public':
@@ -336,7 +368,7 @@ def monitor_trades():
                     save_data()
                     continue
 
-                # Check TP1 hit
+                # TP1 hit – send course promotion in VIP channel
                 if not trade.get('tp1_hit', False):
                     if (trade['action'] == "BUY ✅" and current_price >= trade['tp1']) or \
                        (trade['action'] == "SELL 🔻" and current_price <= trade['tp1']):
@@ -368,7 +400,7 @@ Enroll in our courses and get even better results!
                                 pass
                         save_data()
 
-                # Check TP2 hit
+                # TP2 hit – congratulate and remove trade
                 if not trade.get('tp2_hit', False):
                     if (trade['action'] == "BUY ✅" and current_price >= trade['tp2']) or \
                        (trade['action'] == "SELL 🔻" and current_price <= trade['tp2']):
@@ -396,7 +428,7 @@ Join our VIP channel for 25-30 signals/day!
                         save_data()
                         continue
 
-                # SL warning for VIP
+                # SL warning for VIP only
                 if trade['channel_type'] == 'vip':
                     if trade['action'] == "BUY ✅":
                         dist_pct = (trade['sl'] - current_price) / trade['sl'] * 100
@@ -424,70 +456,240 @@ Consider managing your risk. If you haven't already, you may want to close parti
 
 # === REAL-TIME SIGNAL LOOP ===
 def real_time_signal_loop():
-    """Check for new signals every 5 seconds and send immediately"""
     last_vip_signal_time = 0
     last_public_signal_time = 0
+    last_promo_hour = -1
+
     while True:
         try:
             now = datetime.now()
-            # VIP signals
+            # VIP signals (max 30/day)
             if signal_gen.can_send_vip_signal():
                 sig = signal_gen.get_best_signal(signal_type="vip")
-                if sig:
-                    if last_vip_signal_time and (now - last_vip_signal_time).seconds < 60:
-                        pass
-                    else:
-                        msg = signal_gen.format_vip_signal(sig)
-                        if VIP_CHANNEL:
-                            try:
-                                sent = bot.send_message(VIP_CHANNEL, msg, parse_mode='Markdown')
-                                import hashlib
-                                trade_id = hashlib.md5(f"{sig['pair']}_{sig['entry']}_{now}".encode()).hexdigest()
-                                active_trades[trade_id] = {
-                                    'symbol': sig['symbol'],
-                                    'pair': sig['pair'],
-                                    'action': sig['action'],
-                                    'entry': sig['entry'],
-                                    'tp1': sig['tp1'],
-                                    'tp2': sig['tp2'],
-                                    'sl': sig['sl'],
-                                    'profit_pct': sig['profit_pct'],
-                                    'message_id': sent.message_id,
-                                    'channel_type': 'vip',
-                                    'tp1_hit': False,
-                                    'tp2_hit': False,
-                                    'sl_warning_sent': False,
-                                    'time': now.isoformat()
-                                }
-                                signal_gen.increment_vip_count()
-                                save_data()
-                                last_vip_signal_time = now
-                                logging.info(f"VIP signal sent ({signal_gen.vip_signals_today}/30)")
-                            except Exception as e:
-                                logging.error(f"VIP send error: {e}")
+                if sig and (now - last_vip_signal_time).seconds >= 60:
+                    msg = signal_gen.format_vip_signal(sig)
+                    if VIP_CHANNEL:
+                        try:
+                            sent = bot.send_message(VIP_CHANNEL, msg, parse_mode='Markdown')
+                            trade_id = hashlib.md5(f"{sig['pair']}_{sig['entry']}_{now}".encode()).hexdigest()
+                            active_trades[trade_id] = {
+                                'symbol': sig['symbol'],
+                                'pair': sig['pair'],
+                                'action': sig['action'],
+                                'entry': sig['entry'],
+                                'tp1': sig['tp1'],
+                                'tp2': sig['tp2'],
+                                'sl': sig['sl'],
+                                'profit_pct': sig['profit_pct'],
+                                'message_id': sent.message_id,
+                                'channel_type': 'vip',
+                                'tp1_hit': False,
+                                'tp2_hit': False,
+                                'sl_warning_sent': False,
+                                'time': now.isoformat()
+                            }
+                            signal_gen.increment_vip_count()
+                            save_data()
+                            last_vip_signal_time = now
+                            logging.info(f"VIP signal sent ({signal_gen.vip_signals_today}/30)")
+                        except Exception as e:
+                            logging.error(f"VIP send error: {e}")
 
-            # Public signals
+            # Public signals (max 10/day)
             if signal_gen.can_send_public_signal():
                 sig = signal_gen.get_best_signal(signal_type="public")
-                if sig:
-                    if last_public_signal_time and (now - last_public_signal_time).seconds < 120:
-                        pass
-                    else:
-                        msg = signal_gen.format_public_signal(sig)
-                        if PUBLIC_CHANNEL:
-                            try:
-                                sent = bot.send_message(PUBLIC_CHANNEL, msg, parse_mode='Markdown')
-                                import hashlib
-                                trade_id = hashlib.md5(f"{sig['pair']}_{sig['entry']}_{now}".encode()).hexdigest()
-                                active_trades[trade_id] = {
-                                    'symbol': sig['symbol'],
-                                    'pair': sig['pair'],
-                                    'action': sig['action'],
-                                    'entry': sig['entry'],
-                                    'tp1': sig['tp1'],
-                                    'tp2': sig['tp2'],
-                                    'sl': sig['sl'],
-                                    'profit_pct': sig['profit_pct'],
-                                    'message_id': sent.message_id,
-                                    'channel_type': 'public',
-                       
+                if sig and (now - last_public_signal_time).seconds >= 120:
+                    msg = signal_gen.format_public_signal(sig)
+                    if PUBLIC_CHANNEL:
+                        try:
+                            sent = bot.send_message(PUBLIC_CHANNEL, msg, parse_mode='Markdown')
+                            trade_id = hashlib.md5(f"{sig['pair']}_{sig['entry']}_{now}".encode()).hexdigest()
+                            active_trades[trade_id] = {
+                                'symbol': sig['symbol'],
+                                'pair': sig['pair'],
+                                'action': sig['action'],
+                                'entry': sig['entry'],
+                                'tp1': sig['tp1'],
+                                'tp2': sig['tp2'],
+                                'sl': sig['sl'],
+                                'profit_pct': sig['profit_pct'],
+                                 'message_id': sent.message_id,
+                                'channel_type': 'public',
+                                'tp1_hit': False,
+                                'tp2_hit': False,
+                                'sl_warning_sent': False,
+                                'time': now.isoformat()
+                            }
+                            signal_gen.increment_public_count()
+                            save_data()
+                            last_public_signal_time = now
+                            logging.info(f"Public signal sent ({signal_gen.public_signals_today}/10)")
+                        except Exception as e:
+                            logging.error(f"Public send error: {e}")
+
+            # Promotion every 4 hours in public channel
+            if PUBLIC_CHANNEL and now.hour % 4 == 0 and now.hour != last_promo_hour:
+                promo = f"""
+🔥 *EXCLUSIVE VIP ACCESS – LIMITED SEATS* 🔥
+
+✨ *Upgrade to VIP & Get:*
+• 25-30 Premium Signals/Day (vs 8-10 free)
+• ⏰ Early Entry – 5-10 min before public
+• 📊 Live Market Analysis & News
+• 💬 1-on-1 VIP Support
+• 🎯 89% Proven Win Rate
+
+💰 *Only {VIP_PRICE}*  
+🎓 *VIP + Course Bundle:* ₹9999 (Save ₹2999)
+
+💳 *Pay:* `{UPI_ID}`  
+📱 *Join:* @ForexKailash after payment
+
+⏳ *Limited spots available – don't miss out!*
+"""
+                try:
+                    bot.send_message(PUBLIC_CHANNEL, promo, parse_mode='Markdown')
+                    last_promo_hour = now.hour
+                    logging.info("Promotion sent")
+                except Exception as e:
+                    logging.error(f"Promotion send error: {e}")
+
+            time.sleep(5)
+        except Exception as e:
+            logging.error(f"Signal loop error: {e}")
+            time.sleep(5)
+
+# === ADMIN COMMANDS ===
+@bot.message_handler(commands=['addvip'])
+def add_vip(message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    try:
+        uid = message.text.split()[1]
+        vip_users[uid] = {"activated": datetime.now().isoformat()}
+        save_data()
+        bot.reply_to(message, f"✅ VIP added for {uid}")
+        try:
+            bot.send_message(int(uid), f"🎉 VIP access activated! Join: {VIP_LINK}", parse_mode='Markdown')
+        except:
+            pass
+    except:
+        bot.reply_to(message, "Usage: /addvip [user_id]")
+
+@bot.message_handler(commands=['resetfree'])
+def reset_free(message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    try:
+        uid = message.text.split()[1]
+        free_signal_count[uid] = 0
+        save_data()
+        bot.reply_to(message, f"✅ Free count reset for {uid}")
+    except:
+        bot.reply_to(message, "Usage: /resetfree [user_id]")
+
+@bot.message_handler(commands=['broadcast'])
+def broadcast(message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    msg = message.text.replace('/broadcast', '').strip()
+    if not msg:
+        bot.reply_to(message, "Usage: /broadcast [message]")
+        return
+    cnt = 0
+    for uid in user_data:
+        try:
+            bot.send_message(int(uid), f"📢 *Announcement*\n\n{msg}", parse_mode='Markdown')
+            cnt += 1
+        except:
+            pass
+    bot.reply_to(message, f"✅ Sent to {cnt} users")
+
+@bot.message_handler(commands=['stats'])
+def stats(message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    txt = f"""
+📊 *Bot Stats*
+
+👥 Users: {len(user_data)}
+👑 VIP: {len(vip_users)}
+📊 Active: {len(user_data)}
+
+📈 Today's signals:
+👑 VIP: {signal_gen.vip_signals_today}/30
+📊 Public: {signal_gen.public_signals_today}/10
+
+💰 VIP Price: {VIP_PRICE}
+"""
+    bot.reply_to(message, txt, parse_mode='Markdown')
+
+@bot.message_handler(commands=['forcesignal'])
+def force_signal(message):
+    if message.from_user.id != ADMIN_ID:
+        return
+    bot.reply_to(message, "🔍 Generating...")
+    vip_sig = signal_gen.get_best_signal("vip")
+    pub_sig = signal_gen.get_best_signal("public")
+    if vip_sig and VIP_CHANNEL:
+        sent = bot.send_message(VIP_CHANNEL, signal_gen.format_vip_signal(vip_sig), parse_mode='Markdown')
+        trade_id = hashlib.md5(f"{vip_sig['pair']}_{vip_sig['entry']}_{datetime.now()}".encode()).hexdigest()
+        active_trades[trade_id] = {
+            'symbol': vip_sig['symbol'],
+            'pair': vip_sig['pair'],
+            'action': vip_sig['action'],
+            'entry': vip_sig['entry'],
+            'tp1': vip_sig['tp1'],
+            'tp2': vip_sig['tp2'],
+            'sl': vip_sig['sl'],
+            'profit_pct': vip_sig['profit_pct'],
+            'message_id': sent.message_id,
+            'channel_type': 'vip',
+            'tp1_hit': False,
+            'tp2_hit': False,
+            'sl_warning_sent': False,
+            'time': datetime.now().isoformat()
+        }
+        signal_gen.increment_vip_count()
+    if pub_sig and PUBLIC_CHANNEL:
+        sent = bot.send_message(PUBLIC_CHANNEL, signal_gen.format_public_signal(pub_sig), parse_mode='Markdown')
+        trade_id = hashlib.md5(f"{pub_sig['pair']}_{pub_sig['entry']}_{datetime.now()}".encode()).hexdigest()
+        active_trades[trade_id] = {
+            'symbol': pub_sig['symbol'],
+            'pair': pub_sig['pair'],
+            'action': pub_sig['action'],
+            'entry': pub_sig['entry'],
+            'tp1': pub_sig['tp1'],
+            'tp2': pub_sig['tp2'],
+            'sl': pub_sig['sl'],
+            'profit_pct': pub_sig['profit_pct'],
+            'message_id': sent.message_id,
+            'channel_type': 'public',
+            'tp1_hit': False,
+            'tp2_hit': False,
+            'sl_warning_sent': False,
+            'time': datetime.now().isoformat()
+        }
+        signal_gen.increment_public_count()
+    save_data()
+    bot.reply_to(message, f"✅ VIP: {signal_gen.vip_signals_today}/30, Public: {signal_gen.public_signals_today}/10")
+
+# === START THREADS ===
+threading.Thread(target=real_time_signal_loop, daemon=True).start()
+threading.Thread(target=monitor_trades, daemon=True).start()
+
+# === MAIN ===
+if __name__ == "__main__":
+    print("="*70)
+    print("🤖 KAILASH FOREX SIGNAL BOT – REAL-TIME EDITION")
+    print("="*70)
+    print("✅ VIP: 25-30 signals/day + course promos on TP")
+    print("✅ Public: 8-10 signals/day + auto-delete on SL")
+    print("✅ Real-time monitoring (every 5 seconds)")
+    print("✅ SL warnings for VIP")
+    print("✅ TP updates with course FOMO")
+    print("✅ Free Channel button added")
+    print("✅ Trading pairs: Gold, EUR/USD, GBP/USD, AUD/USD, USD/JPY, USD/CAD, NZD/USD, BTC, ETH, NAS100, USOIL")
+    print("="*70)
+    bot.infinity_polling
+          
